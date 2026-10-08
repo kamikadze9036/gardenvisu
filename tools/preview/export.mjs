@@ -1,5 +1,5 @@
 // Exports the model for Blender (tools/blender): the scene as glTF and the generated data as JSON.
-// Trees, bed planting and the grid are left out of the glTF; Blender builds them from the JSON.
+// Trees, bed planting, the design layer and the grid are left out of the glTF; Blender builds them from the JSON.
 //
 //   node export.mjs ../../index.html ../blender/data
 //   PW_CHANNEL=chrome node export.mjs …   uses the installed Chrome when Playwright's bundled Chromium won't start
@@ -31,9 +31,10 @@ await page.addScriptTag({ content: exporter });
 const { glb, data } = await page.evaluate(() => new Promise(resolve => {
   const { scene, G } = window.GARDEN;
   scene.traverse(o => { if (o.isInstancedMesh) o.visible = false; });
-  G.trees.visible = false; G.grid.visible = false;
-  Object.values(G).forEach(g => { if (g !== G.trees && g !== G.grid) g.visible = true; });
-  const data = { PLANTS, TREES, VIEWS, H, P, LAWN, DRIVE, RAMP, PATIO, DECK, DECK_EDGE, POOL, HOUSE, GARAGE, PLANTERS };
+  const skip = [G.trees, G.grid, G.design];
+  Object.values(G).forEach(g => { g.visible = !skip.includes(g); });
+  const data = { PLANTS, TREES, VIEWS, H, P, LAWN, DRIVE, RAMP, PATIO, DECK, DECK_EDGE, POOL, HOUSE, GARAGE, PLANTERS,
+    SPECIES, PLAN_BEDS, NORTH_BED, GRAVEL, PATH, DESIGN_BEDS, DESIGN_PLANTS };
   new THREE.GLTFExporter().parse(scene, buf => {
     const bytes = new Uint8Array(buf); let s = '';
     for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));

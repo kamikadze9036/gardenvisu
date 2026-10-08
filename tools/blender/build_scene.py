@@ -10,7 +10,7 @@
 #
 # Axes: glTF import turns the Three.js Y-up scene to Z-up. Three (x, y, z) -> Blender (x, -z, y),
 # so Blender X is east, Y is north, Z is up. Plan data [x, z] from the JSON becomes (x, -z).
-import bpy, bmesh, json, math, os, sys
+import bpy, bmesh, glob, json, math, os, sys
 import numpy as np
 from mathutils import Vector, noise
 
@@ -21,6 +21,12 @@ D = json.load(open(os.path.join(HERE, 'data', 'scene.json')))
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 def arg(name, default=None):
     return argv[argv.index(name) + 1] if name in argv else default
+# Extra eye-level views of the design (Three.js coordinates, like D['VIEWS'])
+D['VIEWS'] += [
+    {'key': 'west-bed',   'pos': [-1.2, 1.65, 19.0], 'tgt': [-3.6, 0.5, 4.0]},     # along the new bed by the west fence
+    {'key': 'north-path', 'pos': [-3.1, 1.65, -1.4], 'tgt': [9.0, 0.2, -1.6]},     # along the stepping stones behind the house
+    {'key': 'pool',       'pos': [9.6, 1.6, 18.8],   'tgt': [3.0, 0.3, 13.6]},     # the deck and pool enclosure from the lawn
+]
 VIEWS = arg('--views', ','.join(v['key'] for v in D['VIEWS'])).split(',')
 SAMPLES = int(arg('--samples', 128))
 RES = [int(v) for v in arg('--res', '1600x900').split('x')]
@@ -78,7 +84,7 @@ def mix_rgb(nt, blend, a, b, fac=1.0):
         else: link(nt, val, sock)
     return [s for s in n.outputs if s.type == 'RGBA'][0]
 
-def tex_mat(name, asset, size, tint=None, tint_fac=1.0, rough=1.0, bump=0.3, metallic=0.0, rot=0.0, sat=1.0):
+def tex_mat(name, asset, size, tint=None, tint_fac=1.0, rough=1.0, bump=0.3, metallic=0.0, rot=0.0, sat=1.0, detile=False):
     """Poly Haven texture, box-projected in object space at real-world size (m)."""
     m, nt, bsdf = new_mat(name)
     tc = nt.nodes.new('ShaderNodeTexCoord')
@@ -91,6 +97,18 @@ def tex_mat(name, asset, size, tint=None, tint_fac=1.0, rough=1.0, bump=0.3, met
         link(nt, mp.outputs['Vector'], n.inputs['Vector']); return n
     diff = img('diff.jpg', True); rgh = img('rough.jpg', False)
     col = diff.outputs['Color']
+    if detile:   # blend in a second, rotated and rescaled sample through large-scale noise to hide the repeat
+        mp2 = nt.nodes.new('ShaderNodeMapping'); mp2.inputs['Scale'].default_value = (0.57 / size,) * 3
+        mp2.inputs['Rotation'].default_value = (0, 0, rot + 0.9); mp2.inputs['Location'].default_value = (0.31, 0.77, 0)
+        link(nt, tc.outputs['Object'], mp2.inputs['Vector'])
+        d2 = nt.nodes.new('ShaderNodeTexImage'); d2.image = diff.image; d2.projection = 'BOX'; d2.projection_blend = 0.25
+        link(nt, mp2.outputs['Vector'], d2.inputs['Vector'])
+        nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 0.08 * 3 / size * 3; nz.inputs['Detail'].default_value = 3
+        link(nt, tc.outputs['Object'], nz.inputs['Vector'])
+        ramp = nt.nodes.new('ShaderNodeMapRange'); ramp.inputs['From Min'].default_value = 0.4; ramp.inputs['From Max'].default_value = 0.6
+        link(nt, nz.outputs['Fac'], ramp.inputs['Value'])
+        col = mix_rgb(nt, 'MIX', col, d2.outputs['Color'])
+        link(nt, ramp.outputs['Result'], col.node.inputs['Factor'])
     if sat != 1.0:
         hs = nt.nodes.new('ShaderNodeHueSaturation'); hs.inputs['Saturation'].default_value = sat
         link(nt, col, hs.inputs['Color']); col = hs.outputs['Color']
@@ -192,6 +210,79 @@ def wire_mesh_mat():
     link(nt, mix.outputs[0], nt.nodes['Material Output'].inputs['Surface'])
     return m
 
+def block_mat():
+    """Dark split-face concrete blocks 0,4 × 0,2 m with recessed joints, laid along the wall's local X."""
+    m, nt, bsdf = new_mat('split_block')
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    p = nt.nodes.new('ShaderNodeSeparateXYZ'); link(nt, tc.outputs['Object'], p.inputs[0])
+    n = nt.nodes.new('ShaderNodeSeparateXYZ'); link(nt, tc.outputs['Normal'], n.inputs[0])
+    def op(kind, a, b=None):
+        node = nt.nodes.new('ShaderNodeMath'); node.operation = kind
+        for i, v in enumerate((a, b)):
+            if v is None: continue
+            if isinstance(v, (int, float)): node.inputs[i].default_value = v
+            else: link(nt, v, node.inputs[i])
+        return node.outputs[0]
+    # u runs along whichever horizontal axis the face lies in
+    u = op('ADD', op('MULTIPLY', p.outputs['X'], op('ABSOLUTE', n.outputs['Y'])), op('MULTIPLY', p.outputs['Y'], op('ABSOLUTE', n.outputs['X'])))
+    u = op('ADD', u, op('MULTIPLY', p.outputs['X'], op('ABSOLUTE', n.outputs['Z'])))
+    v = op('ADD', op('MULTIPLY', p.outputs['Z'], op('SUBTRACT', 1.0, op('ABSOLUTE', n.outputs['Z']))), op('MULTIPLY', p.outputs['Y'], op('ABSOLUTE', n.outputs['Z'])))
+    cmb = nt.nodes.new('ShaderNodeCombineXYZ'); link(nt, u, cmb.inputs['X']); link(nt, v, cmb.inputs['Y'])
+    br = nt.nodes.new('ShaderNodeTexBrick')
+    br.inputs['Scale'].default_value = 1.0; br.inputs['Brick Width'].default_value = 0.4; br.inputs['Row Height'].default_value = 0.2
+    br.inputs['Mortar Size'].default_value = 0.007; br.inputs['Mortar Smooth'].default_value = 0.3
+    br.inputs['Color1'].default_value = lin('#55585c'); br.inputs['Color2'].default_value = lin('#4a4d51'); br.inputs['Mortar'].default_value = lin('#3f4144')
+    link(nt, cmb.outputs[0], br.inputs['Vector'])
+    nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 18; nz.inputs['Detail'].default_value = 8; nz.inputs['Roughness'].default_value = 0.65
+    link(nt, tc.outputs['Object'], nz.inputs['Vector'])
+    shade = nt.nodes.new('ShaderNodeMapRange'); shade.inputs['To Min'].default_value = 0.75; shade.inputs['To Max'].default_value = 1.2
+    link(nt, nz.outputs['Fac'], shade.inputs['Value'])
+    colr = mix_rgb(nt, 'MULTIPLY', br.outputs['Color'], (1, 1, 1, 1), 1.0)
+    link(nt, shade.outputs['Result'], [s for s in colr.node.inputs if s.type == 'RGBA'][1])
+    link(nt, colr, bsdf.inputs['Base Color'])
+    bsdf.inputs['Roughness'].default_value = 0.85
+    h = op('ADD', op('MULTIPLY', nz.outputs['Fac'], 0.6), op('SUBTRACT', 1.0, br.outputs['Fac']))
+    bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.7; bp.inputs['Distance'].default_value = 0.01
+    link(nt, h, bp.inputs['Height']); link(nt, bp.outputs['Normal'], bsdf.inputs['Normal'])
+    return m
+
+def clear_panel_mat():
+    """Thin clear polycarbonate sheet: mostly see-through with a glossy reflection."""
+    m, nt, bsdf = new_mat('polycarbonate_clear')
+    out = nt.nodes['Material Output']
+    tp = nt.nodes.new('ShaderNodeBsdfTransparent'); tp.inputs['Color'].default_value = lin('#eef6f2')
+    gl = nt.nodes.new('ShaderNodeBsdfGlossy'); gl.inputs['Roughness'].default_value = 0.03
+    fr = nt.nodes.new('ShaderNodeFresnel'); fr.inputs['IOR'].default_value = 1.58
+    k = nt.nodes.new('ShaderNodeMath'); k.operation = 'MULTIPLY'; k.inputs[1].default_value = 0.35
+    link(nt, fr.outputs[0], k.inputs[0])
+    mix = nt.nodes.new('ShaderNodeMixShader')
+    link(nt, k.outputs[0], mix.inputs['Fac']); link(nt, tp.outputs[0], mix.inputs[1]); link(nt, gl.outputs[0], mix.inputs[2])
+    link(nt, mix.outputs[0], out.inputs['Surface'])
+    return m
+
+def far_lawn_mat(name):
+    """Mown lawn seen from a distance: two greens mixed by noise, with a fine bump."""
+    m, nt, bsdf = new_mat(name)
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    n1 = nt.nodes.new('ShaderNodeTexNoise'); n1.inputs['Scale'].default_value = 0.15; n1.inputs['Detail'].default_value = 6
+    n2 = nt.nodes.new('ShaderNodeTexNoise'); n2.inputs['Scale'].default_value = 60; n2.inputs['Detail'].default_value = 2
+    link(nt, tc.outputs['Object'], n1.inputs['Vector']); link(nt, tc.outputs['Object'], n2.inputs['Vector'])
+    ramp = nt.nodes.new('ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].color = lin('#46702c'); ramp.color_ramp.elements[1].color = lin('#7f9a46')
+    ramp.color_ramp.elements[0].position = 0.35; ramp.color_ramp.elements[1].position = 0.7
+    link(nt, n1.outputs['Fac'], ramp.inputs['Fac']); link(nt, ramp.outputs['Color'], bsdf.inputs['Base Color'])
+    bsdf.inputs['Roughness'].default_value = 0.9
+    bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.4
+    link(nt, n2.outputs['Fac'], bp.inputs['Height']); link(nt, bp.outputs['Normal'], bsdf.inputs['Normal'])
+    return m
+
+def asset_size(asset, default):
+    """Real-world texture size in metres from Poly Haven's info.json, if it was downloaded."""
+    try: return json.load(open(os.path.join(ASSETS, asset, 'info.json')))['dimensions'][0] / 1000
+    except (OSError, KeyError, ValueError): return default
+
+def has(asset): return os.path.exists(os.path.join(ASSETS, asset, 'diff.jpg'))
+
 GLASS = flat_mat('glass_pbr', '#0d1216', rough=0.02, **{'Specular IOR Level': 0.6})
 MATS = {
     'wall':     tex_mat('plaster', 'painted_plaster_wall', 2.0, tint='#f6f4ee', rough=1.0, bump=0.08),
@@ -202,21 +293,23 @@ MATS = {
     'groove':   flat_mat('groove_pbr', '#3d4247', rough=0.5, metallic=0.2),
     'sill':     flat_mat('sill_pbr', '#8f9396', rough=0.4, metallic=0.6),
     'pv':       flat_mat('pv_pbr', '#0b1424', rough=0.08, metallic=0.2),
-    'lawn':     tex_mat('lawn_ground', 'sparse_grass', 2.0, tint='#9ab27a', rough=1.0, bump=0.2),
-    'soil':     tex_mat('mulch', 'aerial_wood_snips', 3.0, tint='#8a6f58', rough=1.0, bump=0.5),
+    'lawn':     tex_mat('lawn_ground', 'sparse_grass', 2.0, tint='#9ab27a', rough=1.0, bump=0.2, detile=True),
+    'soil':     tex_mat('mulch', 'aerial_wood_snips', 3.0, tint='#8a6f58', rough=1.0, bump=0.5, detile=True),
     'pave':     tex_mat('paving', 'rectangular_paving', 2.0, tint='#e2ddd2', rough=1.0, bump=0.25),
     'stone':    tex_mat('stone_paving', 'precast_stone_paving', 2.24, rough=1.0, bump=0.25),
-    'deck':     tex_mat('decking', 'wood_floor_deck', 1.8, tint='#d8cbbb', rough=1.0, bump=0.2, sat=0.45),
-    'edge':     tex_mat('coping', 'precast_stone_paving', 2.24, tint='#f0ece4', rough=1.0, bump=0.15),
+    'deck':     tex_mat('decking_wpc_grey', 'wood_floor_deck', 1.8, tint='#b4b2ae', rough=1.0, bump=0.2, sat=0.0),
+    'edge':     tex_mat('decking_wpc_brown', 'wood_floor_deck', 1.8, tint='#c87b5c', rough=1.0, bump=0.2, sat=0.55, rot=math.pi / 2),
     'water':    water_mat(),
     'cover':    flat_mat('polycarbonate', '#e8f4f7', rough=0.08, **{'Transmission Weight': 0.95}),
     'alu':      flat_mat('alu_pbr', '#c8ccd0', rough=0.3, metallic=1.0),
-    'wood':     tex_mat('wood_light', 'wood_floor_deck', 1.8, tint='#d8b08a', rough=1.0, bump=0.15),
+    'wood':     (tex_mat('planter_wood', 'weathered_planks', asset_size('weathered_planks', 2.0), tint='#d9d6cf', rough=1.0, bump=0.3, sat=0.3)
+                 if has('weathered_planks') else tex_mat('wood_light', 'wood_floor_deck', 1.8, tint='#d8b08a', rough=1.0, bump=0.15)),
     'woodDark': tex_mat('wood_dark', 'wood_floor_deck', 1.8, tint='#7a5a3c', rough=1.0, bump=0.15),
-    'block':    tex_mat('concrete_block', 'concrete_block_wall_02', 2.0, tint='#d4d6da', rough=1.0, bump=0.3),
-    'cobble':   tex_mat('cobble', 'cobblestone_floor_03', 2.4, rough=1.0, bump=0.4),
-    'field':    tex_mat('field', 'sparse_grass', 3.0, tint='#a8a070', rough=1.0, bump=0.3),
-    'neigh':    tex_mat('neighbour_lawn', 'sparse_grass', 2.0, tint='#8fb070', rough=1.0, bump=0.3),
+    'block':    block_mat(),
+    'cobble':   (tex_mat('asphalt', 'asphalt_02', asset_size('asphalt_02', 3.0), rough=1.0, bump=0.3, detile=True) if has('asphalt_02')
+                 else tex_mat('cobble', 'cobblestone_floor_03', 2.4, rough=1.0, bump=0.4)),
+    'field':    tex_mat('field', 'leafy_grass', 4.0, tint='#b5b98a', rough=1.0, bump=0.3, sat=0.7, detile=True),
+    'neigh':    far_lawn_mat('neighbour_lawn'),
     'mesh':     wire_mesh_mat(),
     'post':     flat_mat('post_pbr', '#2f3b33', rough=0.4, metallic=0.5),
     'pot':      flat_mat('pot_pbr', '#3a3c3f', rough=0.55),
@@ -301,12 +394,18 @@ LEAF = {
     'grass':  leaf_mat('ornamental_grass', None, transl=0.3, val_var=0.2, gradient=('#6d7a3e', '#c8ad72', 1.3)),
 }
 
-def proto_shrub(seed, mat, sy):
+def proto_shrub(seed, mat, sy, n=3200, leaf=1.0):
+    """Dense leafy shrub with an irregular, lobed outline (unit radius, height ~1,9·sy)."""
     rng = np.random.default_rng(seed); b = Builder()
-    C, d = shell_points(rng, 2600, 0.35, np.array([1, 1, sy]), np.array([0, 0, sy * 0.92]))
+    C, d = shell_points(rng, n, 0.45, np.array([1, 1, sy]), np.array([0, 0, sy * 0.92]))
+    lobes = np.array([noise.noise(Vector(v) * 2.2 + Vector((seed * 3.1, 0, 0))) for v in d])
+    C = np.array([0, 0, sy * 0.92]) + (C - [0, 0, sy * 0.92]) * (1 + 0.25 * lobes)[:, None]
     keep = C[:, 2] > 0.04; C, d = C[keep], d[keep]
     N = d + np.array([0, 0, 0.6]) + rng.normal(scale=0.5, size=d.shape)
-    b.add(*leaves(C, N, rng.uniform(0.11, 0.16, len(C)), rng.uniform(0.06, 0.09, len(C)), rng))
+    b.add(*leaves(C, N, rng.uniform(0.1, 0.15, len(C)) * leaf, rng.uniform(0.055, 0.085, len(C)) * leaf, rng))
+    for _ in range(14):   # a few stems showing through at the base
+        top = np.append(rng.normal(scale=0.35, size=2), rng.uniform(0.3, 0.9) * sy)
+        b.add(*tube([0, 0, 0], top, 0.02, 0.006, 5))
     return b.obj(f'shrub_{mat.name}_{seed}', [mat], proto_coll)
 
 def proto_aster(seed):
@@ -321,19 +420,20 @@ def proto_aster(seed):
     b.add(*discs(F + unit(N) * 0.004, N, 0.012, rng, 6), 2)
     return b.obj(f'aster_{seed}', [LEAF['aster'], LEAF['flower'], LEAF['eye']], proto_coll)
 
-def proto_grass_clump(seed):
-    """Ornamental grass: ~170 arching blades, height ~1.6 at unit radius."""
-    rng = np.random.default_rng(seed); b = Builder(); K = 7
-    for _ in range(170):
-        az = rng.uniform(0, 2 * np.pi); tilt = rng.uniform(0.05, 0.75); L = rng.uniform(1.1, 1.75); w = rng.uniform(0.012, 0.022)
+def blade_clump(b, rng, n, h, rad, w, tilt, droop=0.35, K=7, mat=0):
+    """Arching blades from a tuft of radius rad; h is the blade length, w = (min, max) width."""
+    for _ in range(n):
+        az = rng.uniform(0, 2 * np.pi); t = rng.uniform(0.03, tilt); L = h * rng.uniform(0.7, 1.05); wd = rng.uniform(*w)
         out = np.array([np.cos(az), np.sin(az), 0]); side = np.array([-np.sin(az), np.cos(az), 0])
-        base = out * rng.uniform(0, 0.13)
         s = np.linspace(0, 1, K + 1)[:, None]
-        p = base + out * (np.sin(tilt) * s * L + 0.35 * tilt * (s * L) ** 2) + np.array([0, 0, 1]) * (np.cos(tilt) * s * L - 0.3 * tilt * (s * L) ** 2)
-        half = (w * (1 - s ** 1.6) + 0.0015) / 2
-        v = np.vstack([np.hstack([p - side * half, p + side * half]).reshape(-1, 3)])
-        f = np.array([[2 * k, 2 * k + 1, 2 * k + 3, 2 * k + 2] for k in range(K)])
-        b.add(v, f)
+        p = out * rng.uniform(0, rad) + out * (np.sin(t) * s * L + droop * t * s ** 2 * L) + np.array([0, 0, 1.0]) * (np.cos(t) * s * L - droop * 0.85 * t * s ** 2 * L)
+        half = (wd * (1 - s ** 1.6) + wd * 0.08) / 2
+        b.add(np.hstack([p - side * half, p + side * half]).reshape(-1, 3), np.array([[2 * k, 2 * k + 1, 2 * k + 3, 2 * k + 2] for k in range(K)]), mat)
+
+def proto_grass_clump(seed):
+    """Ornamental grass for the generated beds: unit radius, height ~1,6."""
+    rng = np.random.default_rng(seed); b = Builder()
+    blade_clump(b, rng, 170, 1.6, 0.13, (0.012, 0.022), 0.75)
     return b.obj(f'grass_{seed}', [LEAF['grass']], proto_coll)
 
 def proto_rock(seed):
@@ -345,6 +445,58 @@ def proto_rock(seed):
     me = bpy.data.meshes.new(f'rock_{seed}'); bm.to_mesh(me); bm.free()
     me.materials.append(ROCK); me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
     o = bpy.data.objects.new(me.name, me); proto_coll.objects.link(o); return o
+
+# ---------------------------------------------------------------- scanned models from Poly Haven (optional)
+models_coll = bpy.data.collections.new('models'); scene.collection.children.link(models_coll)
+
+def load_model(mid):
+    """Imports assets/models/<mid>/*.gltf into its own collection, origin moved to the base centre."""
+    files = glob.glob(os.path.join(ASSETS, 'models', mid, '*.gltf'))
+    if not files: return None
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=files[0])
+    new = [o for o in bpy.data.objects if o not in before]
+    bpy.context.view_layer.update()
+    pts = [o.matrix_world @ Vector(c) for o in new if o.type == 'MESH' for c in o.bound_box]
+    lo = Vector([min(p[i] for p in pts) for i in range(3)]); hi = Vector([max(p[i] for p in pts) for i in range(3)])
+    coll = bpy.data.collections.new(mid); models_coll.children.link(coll)
+    for o in new:
+        for c in list(o.users_collection): c.objects.unlink(o)
+        coll.objects.link(o)
+    coll.instance_offset = ((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z)
+    return {'coll': coll, 'h': hi.z - lo.z, 'r': max(hi.x - lo.x, hi.y - lo.y) / 2}
+
+def recolour(model, name, hue=0.5, sat=1.0, val=1.0, keys=('leaf', 'leaves')):
+    """Copy of a model whose foliage materials are shifted in hue (e.g. autumn colours)."""
+    coll = bpy.data.collections.new(name); models_coll.children.link(coll); copies = {}
+    for o in model['coll'].objects:
+        c = o.copy()
+        if o.data: c.data = o.data.copy()
+        coll.objects.link(c); copies[o] = c
+    for o, c in copies.items():
+        if o.parent in copies: c.parent = copies[o.parent]
+        if c.type != 'MESH': continue
+        for slot in c.material_slots:
+            if not slot.material or not any(k in slot.material.name.lower() for k in keys): continue
+            m = slot.material.copy(); slot.material = m; nt = m.node_tree
+            bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'); sock = bsdf.inputs['Base Color']
+            hs = nt.nodes.new('ShaderNodeHueSaturation')
+            hs.inputs['Hue'].default_value = hue; hs.inputs['Saturation'].default_value = sat; hs.inputs['Value'].default_value = val
+            if sock.links: nt.links.new(sock.links[0].from_socket, hs.inputs['Color'])
+            else: hs.inputs['Color'].default_value = sock.default_value
+            nt.links.new(hs.outputs[0], sock)
+    coll.instance_offset = model['coll'].instance_offset
+    return dict(model, coll=coll)
+
+def instance(model, x, y, z=0.0, height=None, radius=None, rot=0.0):
+    s = height / model['h'] if height else radius / model['r']
+    e = bpy.data.objects.new(model['coll'].name + '_i', None)
+    e.instance_type = 'COLLECTION'; e.instance_collection = model['coll']
+    e.location = (x, y, z); e.rotation_euler = (0, 0, rot); e.scale = (s, s, s)
+    plant_coll.objects.link(e); return e
+
+TREE_M = load_model('tree_small_02')
+ROCKS_M = [m for m in (load_model('boulder_01'), load_model('rock_07')) if m]
 
 PROTOS = {
     'green':  [proto_shrub(s, LEAF['green'], 0.85) for s in (1, 2, 3)],
@@ -361,42 +513,22 @@ def place(proto, x, y, z, r, rot):
     o.location = (x, y, z); o.rotation_euler = (0, 0, rot); o.scale = (r, r, r); return o
 
 for p in D['PLANTS']:
-    variants = PROTOS[p['type']]
     x, y = b2((p['x'], p['z']))
+    if p['type'] == 'rock' and ROCKS_M:
+        instance(ROCKS_M[int(p['c'] * len(ROCKS_M)) % len(ROCKS_M)], x, y, -0.04, radius=p['r'] * 0.8, rot=p['rot'])
+        continue
+    variants = PROTOS[p['type']]
     place(variants[int(p['c'] * len(variants)) % len(variants)], x, y, 0.0, p['r'], p['rot'])
 
-# Lettuce in the raised planters and plants in the entrance pots: swap the spheres for shrubs
-for key, kind in (('veg', 'green'), ('potplant', 'green')):
-    for i, o in enumerate(objs_with(key)):
-        bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
-        lo = Vector([min(c[k] for c in bb) for k in range(3)]); hi = Vector([max(c[k] for c in bb) for k in range(3)])
-        proto = PROTOS['purple' if key == 'potplant' and i == 1 else kind][i % 3 if kind != 'burg' else 0]
-        place(proto, (lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z + (0.0 if key == 'veg' else 0.12), (hi.x - lo.x) / 2 * 1.1, i)
-        o.hide_render = True; o.hide_viewport = True
+# Plants in the entrance pots: swap the spheres for shrubs and asters
+for i, o in enumerate(objs_with('potplant')):
+    bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
+    lo = Vector([min(c[k] for c in bb) for k in range(3)]); hi = Vector([max(c[k] for c in bb) for k in range(3)])
+    proto = PROTOS['purple'][0] if i == 1 else PROTOS['green'][i % 3]
+    place(proto, (lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z + 0.12, (hi.x - lo.x) / 2 * 1.1, i)
+    o.hide_render = True; o.hide_viewport = True
 
 # ---------------------------------------------------------------- trees
-def deciduous(t, seed):
-    rng = np.random.default_rng(seed); b = Builder()
-    x, y = b2((t['x'], t['z'])); h, r = t['h'], t['r']
-    top = h * 0.58; cz = h - r * 1.05
-    b.add(*tube([x, y, 0], [x, y, top], 0.11 * h / 4, 0.06 * h / 4, 10), 0)
-    tips = []
-    for i in range(9):
-        az = i / 9 * 2 * np.pi + rng.uniform(-0.3, 0.3)
-        z0 = top - rng.uniform(0, 0.4)
-        tip = np.array([x + np.cos(az) * r * 0.75, y + np.sin(az) * r * 0.75, cz + rng.uniform(-0.3, 0.7) * r])
-        b.add(*tube([x, y, z0], tip, 0.035, 0.012, 6), 0); tips.append(tip)
-        for _ in range(3):
-            mid = np.array([x, y, z0]) + (tip - [x, y, z0]) * rng.uniform(0.45, 0.8)
-            t2 = mid + unit(rng.normal(size=3) + [0, 0, 0.6]) * r * 0.45
-            b.add(*tube(mid, t2, 0.012, 0.005, 5), 0)
-    C, d = shell_points(rng, int(9000 * r * r), 0.45, np.array([r, r, r * 1.15]), np.array([x, y, cz]))
-    lobes = np.array([noise.noise(Vector(v) * 1.8 + Vector((seed, 0, 0))) for v in d])
-    C = np.array([x, y, cz]) + (C - [x, y, cz]) * (1 + 0.22 * lobes)[:, None]
-    N = d + [0, 0, 0.5] + rng.normal(scale=0.6, size=d.shape)
-    b.add(*leaves(C, N, rng.uniform(0.08, 0.12, len(C)), rng.uniform(0.045, 0.065, len(C)), rng), 1)
-    return b.obj(f'tree_{seed}', [BARK, leaf_mat(f'tree_leaf_{seed}', t['c'])], plant_coll)
-
 def conifer(t, seed):
     rng = np.random.default_rng(seed); b = Builder()
     x, y = b2((t['x'], t['z'])); h, r = t['h'], t['r']
@@ -419,8 +551,156 @@ def conifer(t, seed):
     b.add(*leaves(C, N, rng.uniform(0.08, 0.11, len(C)), 0.035, rng, cup=0.05), 1)
     return b.obj(f'conifer_{seed}', [BARK, leaf_mat(f'needles_{seed}', t['c'], val_var=0.15, transl=0.15)], plant_coll)
 
+AUTUMN = recolour(TREE_M, 'tree_autumn', hue=0.38, sat=1.3, val=1.15) if TREE_M else None
 for i, t in enumerate(D['TREES']):
-    (conifer if t['kind'] == 'conifer' else deciduous)(t, 100 + i)
+    x, y = b2((t['x'], t['z']))
+    if t['kind'] == 'conifer':
+        conifer(t, 100 + i)
+    elif t['x'] < -4:     # the "trees" in the west border are large shrubs
+        sy = t['h'] / (1.9 * t['r'])
+        big = proto_shrub(200 + i, LEAF['green'], sy, n=int(5200 * t['r'] ** 1.6), leaf=1 / t['r'])
+        big.hide_render = True; big.hide_viewport = True
+        place(big, x, y, 0.0, t['r'], i)
+    elif TREE_M:
+        red = int(t['c'][1:3], 16) > int(t['c'][3:5], 16)
+        instance(AUTUMN if red else TREE_M, x, y, 0.0, height=t['h'], rot=i * 1.7)
+
+# ---------------------------------------------------------------- perennials from the planting plan (real size in metres)
+SP = {int(k): v for k, v in D.get('SPECIES', {}).items()}
+_sp_mats = {}
+def sp_mats(i):
+    if i not in _sp_mats:
+        s = SP[i]
+        _sp_mats[i] = [leaf_mat(f'sp{i}_leaf', s['leaf']), leaf_mat(f'sp{i}_flower', s.get('flower', s['leaf']), transl=0.25, val_var=0.15),
+                       flat_mat(f'sp{i}_eye', s.get('eye', '#c9a227'), rough=0.8)]
+    return _sp_mats[i]
+
+def leaf_mound(b, rng, n, rad, hgt, L, W, mat=0, rmin=0.35):
+    C, d = shell_points(rng, n, rmin, np.array([rad, rad, hgt / 2]), np.array([0, 0, hgt / 2]))
+    keep = C[:, 2] > 0.01; C, d = C[keep], d[keep]
+    b.add(*leaves(C, d + [0, 0, 0.7] + rng.normal(scale=0.4, size=d.shape), rng.uniform(L * 0.7, L * 1.2, len(C)), W, rng), mat)
+    return C, d
+
+def stems(b, rng, n, h, rad, lean=0.25, r=0.0025, mat=0):
+    """Thin, slightly curved stems; returns a polyline (5 points) for each."""
+    lines = []
+    for _ in range(n):
+        az = rng.uniform(0, 2 * np.pi); out = np.array([np.cos(az), np.sin(az), 0])
+        base = out * rng.uniform(0, rad); top_h = h * rng.uniform(0.8, 1.05); l = rng.uniform(0.3, 1) * lean
+        s = np.linspace(0, 1, 5)[:, None]
+        pts = base + out * (l * top_h * s ** 1.5) + np.array([0, 0, top_h]) * s
+        for a, c in zip(pts[:-1], pts[1:]): b.add(*tube(a, c, r, r * 0.7, 3), mat)
+        lines.append(pts)
+    return lines
+
+def florets_along(b, rng, a, c, n, r, mat, spiral=0.012):
+    """Flower spike: small florets spiralling up the segment a → c."""
+    t = np.linspace(0, 1, n)[:, None]; ang = t[:, 0] * n * 2.4
+    axis = unit(c - a); side = unit(np.cross(axis, [0.3, 0.1, 1.0] if abs(axis[2]) < 0.9 else [1.0, 0, 0])); side2 = np.cross(axis, side)
+    rad = spiral * (1 - 0.6 * t)
+    P = a + (c - a) * t + rad * (np.cos(ang)[:, None] * side + np.sin(ang)[:, None] * side2)
+    N = unit(P - (a + (c - a) * t) + axis * 0.3)
+    b.add(*discs(P, N, r * (1 - 0.4 * t[:, 0]), rng, 6), mat)
+
+def daisy(b, rng, c, up, petal, n, droop, eye_r):
+    up = unit(np.array(up, float)); s1 = unit(np.cross(up, [0.2, 0.3, 1.0] if abs(up[2]) < 0.9 else [1.0, 0, 0])); s2 = np.cross(up, s1)
+    for k in range(n):
+        a = 2 * np.pi * k / n + rng.uniform(-0.1, 0.1); d = np.cos(a) * s1 + np.sin(a) * s2
+        tip = c + d * petal - up * droop * petal; w = petal * 0.28; sd = np.cross(up, d)
+        b.add(np.array([c + d * eye_r * 0.8, c + d * petal * 0.5 + sd * w / 2 - up * droop * petal * 0.3, tip, c + d * petal * 0.5 - sd * w / 2 - up * droop * petal * 0.3]), np.array([[0, 1, 2, 3]]), 1)
+    cone = discs(np.array([c + up * eye_r * 0.6]), np.array([up]), eye_r, rng, 10)
+    b.add(*cone, 2)
+
+def proto_species(i, seed):
+    s = SP[i]; h, dd, kind = s['h'], s['d'], s['kind']; rng = np.random.default_rng(seed); b = Builder(); R = dd / 2
+    if kind == 'plume':          # Calamagrostis: arching leaves, upright stems with narrow feathery plumes
+        blade_clump(b, rng, 150, h * 0.6, 0.06, (0.006, 0.01), 0.7)
+        for pts in stems(b, rng, 32, h, 0.07, lean=0.12):
+            florets_along(b, rng, pts[2] + (pts[4] - pts[2]) * 0.2, pts[4], 26, 0.009, 1, spiral=0.008)
+    elif kind == 'grass':        # Sesleria: dense lime-green tuft
+        blade_clump(b, rng, 260, h, 0.05, (0.004, 0.007), 0.8, droop=0.45)
+    elif kind == 'finegrass':    # Stipa tenuissima: hair-fine, flowing
+        blade_clump(b, rng, 650, h, 0.04, (0.0015, 0.0025), 0.95, droop=0.6, K=8)
+    elif kind == 'spikes':       # Stachys, Salvia: leafy base, upright flower spikes
+        leaf_mound(b, rng, 380, R * 0.9, h * 0.38, 0.06, 0.028)
+        for pts in stems(b, rng, 24, h, R * 0.45, lean=0.2):
+            florets_along(b, rng, pts[2] + (pts[4] - pts[2]) * 0.1, pts[4], 34, 0.007, 1)
+    elif kind == 'daisy':        # Echinacea: tall stems with drooping pink petals around an orange cone
+        leaf_mound(b, rng, 260, R * 0.8, h * 0.45, 0.09, 0.04)
+        for pts in stems(b, rng, 11, h, R * 0.4, lean=0.2, r=0.004):
+            daisy(b, rng, pts[-1], pts[-1] - pts[-2], 0.045, 14, 0.5, 0.018)
+    elif kind == 'cloud':        # Calamintha: mound of tiny leaves under a haze of pale flowers
+        leaf_mound(b, rng, 1100, R, h * 0.9, 0.025, 0.015)
+        F, fd = shell_points(rng, 900, 0.85, np.array([R * 1.02, R * 1.02, h * 0.47]), np.array([0, 0, h * 0.47]))
+        keep = F[:, 2] > h * 0.25; b.add(*discs(F[keep], fd[keep] + [0, 0, 0.5], 0.0045, rng, 5), 1)
+    elif kind == 'wands':        # Gaura: airy arching wands with small white flowers
+        leaf_mound(b, rng, 160, R * 0.4, h * 0.25, 0.05, 0.012)
+        for pts in stems(b, rng, 34, h, R * 0.2, lean=0.75, r=0.0018):
+            for t in rng.uniform(0.5, 1.0, 6):
+                k = min(int(t * 4), 3); p = pts[k] + (pts[k + 1] - pts[k]) * (t * 4 - k)
+                b.add(*discs(np.array([p + rng.normal(scale=0.01, size=3)]), np.array(rng.normal(size=(1, 3)) + [0, 0, 0.5]), 0.011, rng, 5), 1)
+    elif kind == 'cushion':      # Aster dumosus: dense dome covered in small daisies
+        leaf_mound(b, rng, 1300, R, h, 0.03, 0.012)
+        F, fd = shell_points(rng, 700, 0.9, np.array([R * 1.03, R * 1.03, h * 0.52]), np.array([0, 0, h * 0.5]))
+        keep = F[:, 2] > h * 0.3; F, fd = F[keep], fd[keep]
+        N = fd + [0, 0, 0.8]
+        b.add(*discs(F, N, rng.uniform(0.011, 0.015, len(F)), rng, 10), 1)
+        b.add(*discs(F + unit(N) * 0.002, N, 0.004, rng, 6), 2)
+    elif kind == 'pincushion':   # Scabiosa: basal leaves, wiry stems with lavender pincushion heads
+        leaf_mound(b, rng, 240, R * 0.7, h * 0.3, 0.07, 0.022)
+        for pts in stems(b, rng, 16, h, R * 0.35, lean=0.35, r=0.002):
+            up = pts[-1] - pts[-2]
+            b.add(*discs(np.array([pts[-1]]), np.array([up]), 0.019, rng, 12), 1)
+            b.add(*discs(np.array([pts[-1] + unit(up) * 0.004]), np.array([up]), 0.009, rng, 8), 1)
+    o = b.obj(f'sp{i}_{seed}', sp_mats(i), proto_coll); o.hide_render = True; o.hide_viewport = True
+    return o
+
+def proto_strawberry(seed):
+    rng = np.random.default_rng(seed); b = Builder()
+    leaf_mound(b, rng, 140, 0.17, 0.2, 0.07, 0.055)
+    F, fd = shell_points(rng, 30, 0.8, np.array([0.17, 0.17, 0.1]), np.array([0, 0, 0.1]))
+    b.add(*discs(F[:14], fd[:14] + [0, 0, 1], 0.009, rng, 5), 1)
+    b.add(*discs(F[14:] - [0, 0, 0.02], fd[14:], 0.008, rng, 6), 2)
+    o = b.obj(f'strawberry_{seed}', [leaf_mat('strawberry_leaf', '#4f7f35'), flat_mat('strawberry_flower', '#f4f1ea', rough=0.6),
+                                     flat_mat('strawberry_fruit', '#b8261f', rough=0.25)], proto_coll)
+    o.hide_render = True; o.hide_viewport = True; return o
+
+# ---------------------------------------------------------------- design layer: new beds, gravel strip, stepping stones
+def poly_obj(name, pts, z, mat):
+    return mesh_obj(name, [(*b2(p), z) for p in reversed(pts)], [list(range(len(pts)))], [mat], smooth=False)
+
+DESIGN = 'DESIGN_BEDS' in D
+if DESIGN:
+    for k, bed in enumerate(D['DESIGN_BEDS']): poly_obj(f'design_bed_{k}', bed, 0.022, MATS['soil'])
+    GRAVEL_M = (tex_mat('white_pebbles', 'clean_pebbles', asset_size('clean_pebbles', 1.0), rough=1.0, bump=0.6) if has('clean_pebbles')
+                else flat_mat('white_pebbles', '#d9d7d0', rough=0.8))
+    poly_obj('gravel_strip', D['GRAVEL'], 0.04, GRAVEL_M)
+    SLAB_M = (tex_mat('concrete_slab', 'concrete_floor_02', asset_size('concrete_floor_02', 2.0), tint='#e4e2dc', rough=1.0, bump=0.1, sat=0.3)
+              if has('concrete_floor_02') else flat_mat('concrete_slab', '#b9bab6', rough=0.7))
+    pa = D['PATH']; x = pa['x0']; k = 0
+    while x < pa['x1']:
+        y0, y1 = b2((x, pa['z'] - pa['across'] / 2))[1], b2((x, pa['z'] + pa['across'] / 2))[1]
+        bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1.0)
+        bmesh.ops.bevel(bm, geom=list(bm.edges), offset=0.006, segments=2, affect='EDGES')
+        o = mesh_obj(f'slab_{k}', [], [], [SLAB_M]); bm.to_mesh(o.data); bm.free()
+        o.location = (x + pa['along'] / 2, (y0 + y1) / 2, 0.03); o.scale = (pa['along'], abs(y1 - y0), 0.06)
+        x += pa['along'] + pa['gap']; k += 1
+    SP_PROTOS = {i: [proto_species(i, 300 + i * 10 + v) for v in range(2)] for i in SP}
+    rs = np.random.default_rng(5)
+    for n, p in enumerate(D['DESIGN_PLANTS']):
+        x, y = b2((p['x'], p['z']))
+        place(SP_PROTOS[p['sp']][n % 2], x, y, 0.022, rs.uniform(0.85, 1.15), p['rot'])
+    print(f"design: {len(D['DESIGN_PLANTS'])} perennials, {k} stepping stones")
+
+# Raised planters: strawberries instead of the lettuce spheres
+STRAW = [proto_strawberry(s) for s in (31, 32)]
+rs = np.random.default_rng(9)
+for o in objs_with('veg'): o.hide_render = True; o.hide_viewport = True
+for a, bx in D['PLANTERS']:
+    for xx in np.arange(a + 0.3, bx - 0.15, 0.32):
+        for zz in (-3.45, -3.1, -2.75):
+            x, y = b2((xx + rs.uniform(-0.05, 0.05), zz + rs.uniform(-0.04, 0.04)))
+            place(STRAW[int(rs.integers(2))], x, y, 0.46, rs.uniform(0.85, 1.2), rs.uniform(0, 6.3))
 
 # ---------------------------------------------------------------- lawn: instanced grass clumps
 def grass_patch(seed):
@@ -450,6 +730,7 @@ def lawn_blade_mat():
 
 LAWN_P = poly('LAWN')
 blocked = [poly(k) for k in ('DRIVE', 'RAMP', 'PATIO', 'DECK_EDGE', 'HOUSE', 'GARAGE')]
+blocked += [np.array([b2(p) for p in bed]) for bed in D.get('DESIGN_BEDS', []) + ([D['GRAVEL']] if 'GRAVEL' in D else [])]
 rng = np.random.default_rng(7)
 xmin, ymin = LAWN_P.min(0); xmax, ymax = LAWN_P.max(0)
 DENSITY = 110      # patches per m²
@@ -501,6 +782,100 @@ wv = mesh_obj('pool_water', [(x, y, POOL_FLOOR + 0.01) for x, y in c] + [(x, y, 
               [(3, 2, 1, 0), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7), (4, 5, 6, 7)], [MATS['water']], smooth=False)
 for o in objs_with('water'):
     if o != wv: o.hide_render = True
+
+# ---------------------------------------------------------------- telescopic pool enclosure (after the photo in podklady/navrh)
+# Four low segments sliding over each other, flat-topped arch, clear panels, anodised aluminium arches and rails.
+for o in objs_with('cover'): o.hide_render = True; o.hide_viewport = True
+for o in objs_with('alu'):
+    bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
+    if px0 - 0.4 < min(c.x for c in bb) and max(c.x for c in bb) < px1 + 0.4 and py0 - 0.6 < min(c.y for c in bb) and max(c.y for c in bb) < py1 + 0.6 and max(c.z for c in bb) < 0.9:
+        o.hide_render = True; o.hide_viewport = True
+PANEL = clear_panel_mat()
+ALU = flat_mat('anodised_alu', '#c9ccce', rough=0.25, metallic=1.0)
+yc = (py0 + py1) / 2; DECK_TOP = 0.15
+def profile(half, h, k=28, p=4.0):
+    t = np.linspace(-np.pi / 2, np.pi / 2, k)
+    return np.c_[half * np.sign(np.sin(t)) * np.abs(np.sin(t)) ** (2 / p), h * np.abs(np.cos(t)) ** (2 / p)]
+for i in range(4):
+    half, h = 1.98 - i * 0.05, 0.56 - i * 0.04
+    xa = px0 - 0.1 + i * 1.62; xb = xa + 1.72
+    pr = profile(half, h); n = len(pr)
+    verts = [(xa, yc + y, DECK_TOP + z) for y, z in pr] + [(xb, yc + y, DECK_TOP + z) for y, z in pr]
+    faces = [(j, j + 1, n + j + 1, n + j) for j in range(n - 1)]
+    if i == 0: faces.append(tuple(range(n - 1, -1, -1)))            # closed end towards the house
+    if i == 3: faces.append(tuple(range(n, 2 * n)))
+    mesh_obj(f'cover_panel_{i}', verts, faces, [PANEL], smooth=True)
+    b = Builder()
+    for xx in (xa, xb, (xa + xb) / 2):
+        for (y0_, z0_), (y1_, z1_) in zip(pr[:-1], pr[1:]):
+            b.add(*tube([xx, yc + y0_, DECK_TOP + z0_], [xx, yc + y1_, DECK_TOP + z1_], 0.022, 0.022, 6))
+    for s in (-1, 1):
+        b.add(*tube([xa, yc + s * half, DECK_TOP + 0.03], [xb, yc + s * half, DECK_TOP + 0.03], 0.035, 0.035, 4))
+    b.obj(f'cover_frame_{i}', [ALU])
+for s in (-1, 1):   # running rails on the deck
+    b = Builder(); b.add(*tube([px0 - 0.15, yc + s * 2.0, DECK_TOP + 0.01], [px1 + 1.2, yc + s * 2.0, DECK_TOP + 0.01], 0.02, 0.02, 4)); b.obj('cover_rail', [ALU])
+
+# ---------------------------------------------------------------- surroundings: sidewalks, kerbs, road, houses across the street, tree line
+CHAIN = [(22.99, -70.0)] + [tuple(D['P'][k]) for k in (1, 2, 3, 4, 5, 6, 9, 10, 11, 12)] + [(-70.0, 24.48)]
+def offset_chain(chain, w):
+    pts = np.array(chain, float); out = []
+    nrm = lambda a, c: np.array([c[1] - a[1], -(c[0] - a[0])]) / np.linalg.norm(np.subtract(c, a))   # outward for a clockwise plot
+    for i in range(len(pts)):
+        ns = ([nrm(pts[i - 1], pts[i])] if i > 0 else []) + ([nrm(pts[i], pts[i + 1])] if i < len(pts) - 1 else [])
+        o = ns[0] * w if len(ns) == 1 else (ns[0] + ns[1]) / (1 + ns[0] @ ns[1]) * w
+        out.append(pts[i] + o)
+    return out
+def strip(name, w0, w1, z0, mat, z1=None):
+    A, B = offset_chain(CHAIN, w0), offset_chain(CHAIN, w1); n = len(A); z1 = z0 if z1 is None else z1
+    v = [(*b2(p), z0) for p in A] + [(*b2(p), z1) for p in B]
+    return mesh_obj(name, v, [(n + i, n + i + 1, i + 1, i) for i in range(n - 1)], [mat], smooth=False)
+ST = D['H']['street']
+SIDEWALK = (tex_mat('sidewalk', 'concrete_pavement', asset_size('concrete_pavement', 2.0), rough=1.0, bump=0.3) if has('concrete_pavement')
+            else MATS['pave'])
+KERB = flat_mat('kerb', '#a9a7a1', rough=0.8)
+VERGE = far_lawn_mat('verge')
+for side, (w0, w1) in (('near', (0.02, 2.0)), ('far', (8.6, 10.6))):
+    strip(f'sidewalk_{side}', w0, w1, ST + 0.06, SIDEWALK)
+    kw = w1 if side == 'near' else w0
+    strip(f'kerb_top_{side}', kw - 0.15 if side == 'near' else kw, kw if side == 'near' else kw + 0.15, ST + 0.13, KERB)
+    strip(f'kerb_face_{side}', kw, kw, ST + 0.13, KERB, z1=ST)
+strip('verge_far', 10.6, 45.0, ST + 0.07, VERGE)
+for o in objs_with('cobble'): o.location.z -= 0.0   # the big Three.js street plane is the asphalt road now
+
+def house(x, y, rot, w=10.5, d=8.5, wall_h=3.1, ridge=3.4, seed=0):
+    rng = np.random.default_rng(seed); b = Builder()
+    hw, hd = w / 2, d / 2
+    v = [(-hw, -hd, 0), (hw, -hd, 0), (hw, hd, 0), (-hw, hd, 0), (-hw, -hd, wall_h), (hw, -hd, wall_h), (hw, hd, wall_h), (-hw, hd, wall_h), (-hw, 0, wall_h + ridge), (hw, 0, wall_h + ridge)]
+    b.add(np.array(v, float), np.array([[0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]]), 0)
+    b.add(np.array(v, float), np.array([[4, 5, 9, 8][::-1], [6, 7, 8, 9][::-1]]), 1)
+    b.add(np.array(v, float), np.array([[5, 6, 9], [7, 4, 8]]), 0)
+    for k in range(3):   # a few dark windows on the long sides
+        for s in (-1, 1):
+            xx = -hw + (k + 0.7) * w / 3.4; yy = s * (hd + 0.02)
+            b.add(np.array([(xx, yy, 0.9), (xx + 1.3, yy, 0.9), (xx + 1.3, yy, 2.3), (xx, yy, 2.3)]), np.array([[0, 1, 2, 3] if s > 0 else [3, 2, 1, 0]]), 2)
+    o = b.obj(f'neighbour_house_{seed}', [MATS['wall'], MATS['roof'], GLASS])
+    o.location = (x, y, ST + 0.07); o.rotation_euler = (0, 0, rot); return o
+far = offset_chain(CHAIN, 22.0)
+seed = 0
+for (ax, az), (bx, bz) in zip(far[:-1], far[1:]):
+    seg = np.hypot(bx - ax, bz - az); ang = math.atan2(-(bz - az), bx - ax)
+    for t in np.arange(10, seg - 6, 24):
+        f = t / seg; x, y = b2((ax + (bx - ax) * f, az + (bz - az) * f))
+        if abs(x - 11) > 60 or abs(y + 13) > 60: continue
+        house(x, y, ang, seed=seed); seed += 1
+house(*b2((-24.0, 7.0)), 0.0, w=11, d=9, seed=99)      # neighbour to the west
+if TREE_M:
+    rng = np.random.default_rng(3)
+    for x in np.arange(-70, 80, 5.5):                    # tree line beyond the field and the neighbours
+        instance(TREE_M, x + rng.uniform(-2, 2), 72 + rng.uniform(-6, 6), ST, height=rng.uniform(6, 11), rot=rng.uniform(0, 6.3))
+    for yy in np.arange(-60, 70, 6):
+        instance(TREE_M, -72 + rng.uniform(-4, 4), yy, ST, height=rng.uniform(6, 10), rot=rng.uniform(0, 6.3))
+    for k in range(12):                                  # trees in the gardens across the street
+        p = offset_chain(CHAIN, 30 + rng.uniform(0, 10))[int(rng.integers(1, len(CHAIN) - 1))]
+        instance(TREE_M, *b2((p[0] + rng.uniform(-8, 8), p[1] + rng.uniform(-8, 8))), ST, height=rng.uniform(4, 8), rot=rng.uniform(0, 6.3))
+    for k in range(5):
+        instance(TREE_M, *b2((-12 - rng.uniform(0, 30), rng.uniform(-3, 22))), 0.0, height=rng.uniform(4, 7), rot=rng.uniform(0, 6.3))
+bpy.context.view_layer.layer_collection.children['models'].exclude = True
 
 # ---------------------------------------------------------------- world: HDRI sky, rotated so the sun matches the Three.js sun
 world = bpy.data.worlds.new('sky'); scene.world = world; world.use_nodes = True

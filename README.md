@@ -78,7 +78,9 @@ ssh dell 'cd ~/Projects/gardenvisu/tools/blender && ~/Applications/blender/blend
 scp 'dell:Projects/gardenvisu/tools/blender/out/view-*.png' ../blender/out/
 ```
 
-Volby: `--views bird,street,terrace,top`, `--samples`, `--res 1600x900`, `--cpu`, `--no-render`. Soubor `out/garden.blend` jde otevřít v Blenderu na Dellu a dál upravovat ručně. Textury a obloha jsou v `tools/blender/assets/` (nejsou v gitu, stahují se z Poly Haven API: `assets/<id>/{diff,nor,rough}.jpg`, `assets/hdri/sky.hdr` = kloofendal_48d_partly_cloudy_puresky).
+Volby: `--views bird,street,terrace,top,west-bed,north-path,pool`, `--samples`, `--res 1600x900`, `--cpu`, `--no-render`. Soubor `out/garden.blend` jde otevřít v Blenderu na Dellu a dál upravovat ručně. Co scéna obsahuje navíc proti webu: zastřešení bazénu podle fotky (4 nízké teleskopické segmenty), šedou WPC terasu s hnědým okrajem, zeď z tmavých tvárnic (procedurálně), ulici s asfaltem, chodníky a obrubníky, domy naproti a řadu stromů na obzoru, 10 druhů trvalek z osazovacího plánu a jahody ve vyvýšených záhonech. Kromě 4 pohledů z webu jsou v Blenderu ještě 3 pohledy z výšky očí na návrh (`west-bed`, `north-path`, `pool`).
+
+Textury a obloha jsou v `tools/blender/assets/` (nejsou v gitu, stahují se z Poly Haven API: `assets/<id>/{diff,nor,rough}.jpg`, `assets/hdri/sky.hdr` = kloofendal_48d_partly_cloudy_puresky). Další textury: asphalt_02, concrete_pavement, concrete_floor_02, clean_pebbles, weathered_planks. Modely v `assets/models/<id>/`: tree_small_02 (listnaté stromy, podzimní varianta přebarvením), boulder_01 a rock_07. Keře shrub_01–04 z Poly Haven jsou řídké africké keříky, do zahrady se nehodí, proto jsou keře a trvalky generované kódem.
 
 ## Unreal Engine (poznámky)
 
@@ -97,6 +99,13 @@ Rendery z Blenderu jsou statické snímky. Jak model procházet, od nejjednoduš
 2. **Video průlet.** Kamera po dráze ulice → zahrada → terasa, render v Cycles do MP4. Fotorealistické, ale ne interaktivní. Render řádově hodiny.
 3. **Procházení v prohlížeči se zapečeným světlem.** Cycles spočítá stíny a odražené světlo do textur (bake) a výsledek se vrátí do webového modelu s ovládáním WASD. Plynulé i na iPadu a mobilu, jde snadno sdílet. Nejlépe sedí k účelu ukazovat návrh zahrady.
 4. **Unreal Engine 5 (do budoucna).** Na Quadro P2000 (4 GB, Pascal) nemá smysl. V záloze je GTX 1070 s 8 GB VRAM, která splňuje doporučených 8 GB. Je to taky Pascal bez RT jader, takže Lumen jen v softwarovém režimu. Je to desktopová karta, takže potřebuje stolní PC, nebo eGPU box přes Thunderbolt 3, pokud ho Dell podporuje (neověřeno). Postup: export `.glb` z Blenderu, import do Unrealu, rozměry v metrech zůstanou.
+
+## Návrh zahrady
+
+Vrstva **Návrh** ve webu a stejná data v Blenderu (konstanty `SPECIES`, `PLAN_BEDS`, `NORTH_BED`, `GRAVEL`, `PATH` v `index.html`):
+
+- **Rozšíření záhonu podle osazovacího plánu** (`podklady/navrh/`, jen lokálně): 2 záhony 12 a 6 m × 1 m, dvě řady po 0,5 m, 10 druhů trvalek. **Poloha je odhad:** před keři u západního plotu, 12m záhon od rohu domu na jih, 6m hned za ním, první rostlina řady je na severním konci. Posun = změnit `x0`, `z0` v `PLAN_BEDS`.
+- **Cesta za domem** podle inspirační fotky: nášlapné betonové desky 1,0 × 0,4 m, trvalky v mulči, pruh bílého štěrku u severní zdi, vyvýšené záhony s jahodami u plotu. Rozměry jsou odhad.
 
 ## Další kroky
 

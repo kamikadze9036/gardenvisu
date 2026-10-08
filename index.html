@@ -90,6 +90,38 @@ const HOUSE = [[0,0],[14.9,0],[14.9,8.65],[0,8.65]];
 const GARAGE= [[14.9,4.3],[23.0,4.3],[23.0,12.8],[14.9,12.8]];
 const PLANTERS = [[13.2,15.5],[16.1,20.0]]; // x ranges, z -3.8 .. -2.4
 
+// ---------- Garden design (návrh) ----------
+// Perennials from the planting plan "Rozšíření záhonu" (podklady/navrh). h = height, d = spread in metres.
+const SPECIES = {
+  1: {cz:'Třtina chloupkatá',     lat:'Calamagrostis brachytricha', kind:'plume',      h:1.0,  d:0.6,  leaf:'#6f7d45', flower:'#c9b3a8'},
+  2: {cz:'Pěchava podzimní',      lat:'Sesleria autumnalis',        kind:'grass',      h:0.4,  d:0.45, leaf:'#a3b44c'},
+  3: {cz:'Kavyl péřovitý',        lat:'Stipa tenuissima',           kind:'finegrass',  h:0.5,  d:0.45, leaf:'#d6c38c'},
+  4: {cz:'Čistec velkokvětý',     lat:'Stachys grandiflora',        kind:'spikes',     h:0.45, d:0.4,  leaf:'#4d6b33', flower:'#b04a9a'},
+  5: {cz:'Šalvěj hajní',          lat:'Salvia nemorosa',            kind:'spikes',     h:0.5,  d:0.45, leaf:'#55703a', flower:'#5a3fa0'},
+  6: {cz:'Třapatka nachová',      lat:'Echinacea purpurea',         kind:'daisy',      h:0.9,  d:0.5,  leaf:'#4b6a30', flower:'#c4508f', eye:'#9a4a22'},
+  7: {cz:'Marulka lékařská',      lat:'Calamintha nepeta',          kind:'cloud',      h:0.35, d:0.45, leaf:'#6a8a4a', flower:'#ddd0ec'},
+  8: {cz:'Svíčkovec Lindheimerův',lat:'Gaura lindheimeri',          kind:'wands',      h:0.9,  d:0.6,  leaf:'#5b7a3a', flower:'#f6eef2'},
+  9: {cz:'Hvězdnice keřovitá',    lat:'Aster dumosus',              kind:'cushion',    h:0.35, d:0.45, leaf:'#3f6a30', flower:'#9b74c9', eye:'#e0b030'},
+  10:{cz:'Hlaváč fialový',        lat:'Scabiosa columbaria',        kind:'pincushion', h:0.5,  d:0.4,  leaf:'#6a8050', flower:'#a3a8de'}
+};
+// Bed extension, 1 m deep, two rows 0,5 m apart, plants every 0,5 m (scale of the plan 2 cm = 1 m).
+// Assumption: in front of the shrubs along the west fence, the 12 m bed from the house corner southwards,
+// the 6 m bed right after it; the first plant of each row is the north end. Back row is the one by the shrubs.
+const PLAN_BEDS = [
+  {x0:-3.88, z0:-0.2, len:12,
+   back: [6,1,5,8,6,2,3,8,1,5,6,2,8,6,1,5,3,8,1,6,5,2,8,6],
+   front:[7,3,9,10,2,4,4,4,9,5,7,2,10,3,7,9,4,4,4,5,2,10,9,7]},
+  {x0:-3.88, z0:12.1, len:6,
+   back: [2,8,5,1,6,5,8,2,5,1,6,3],
+   front:[2,10,3,5,9,7,3,10,2,5,7,9]}
+];
+// Behind the house (north): gravel strip along the wall, stepping-stone path through a perennial bed,
+// the two raised planters stay by the fence (after the inspiration photo in podklady/navrh).
+const NORTH_BED = [[-2.88,-2.45],[22.99,-2.45],[22.99,-0.4],[-2.88,-0.4]];
+const GRAVEL    = [[0,-0.4],[14.9,-0.4],[14.9,0],[0,0]];
+const PATH = {z:-1.45, x0:-3.4, x1:22.5, along:0.4, across:1.0, gap:0.2};   // concrete slabs 1,0 × 0,4 m
+const DESIGN_BEDS = [NORTH_BED, ...PLAN_BEDS.map(b=>[[b.x0,b.z0],[b.x0+1,b.z0],[b.x0+1,b.z0+b.len],[b.x0,b.z0+b.len]])];
+
 // Trees: position, height, crown radius, colour
 const TREES = [
   {kind:'deciduous',x:10.3,z:18.3,h:3.6,r:0.9,c:'#c4703a'},   // young tree in front of the terrace, autumn colours in the photos
@@ -118,6 +150,7 @@ const LAYERS = [
   {key:'trees',   name:'Stromy'},
   {key:'fence',   name:'Oplocení'},
   {key:'context', name:'Okolí'},
+  {key:'design',  name:'Návrh'},
   {key:'grid',    name:'Mřížka 1 m', off:true}
 ];
 
@@ -167,6 +200,20 @@ for (let gx=-5.6; gx<28.9; gx+=STEP) for (let gz=-4.7; gz<31.1; gz+=STEP) {
 }
 const bedArea = bedCells*STEP*STEP;
 
+// Design planting: the plan rows as drawn, plus a loose mix along the north path.
+const DESIGN_PLANTS = [];
+PLAN_BEDS.forEach(b=>[['back',0.25,0],['front',0.75,0.25]].forEach(([row,dx,dz])=>{
+  b[row].forEach((sp,i)=>{ const z=b.z0+dz+0.125+i*b.len/b[row].length; if(z<b.z0+b.len) DESIGN_PLANTS.push({sp, x:b.x0+dx, z, rot:rand()*Math.PI*2}); });
+}));
+{
+  const r2 = rng(7), MIX = [2,3,5,7,9,4,10,2,7];
+  for (let x=-2.6; x<22.8; x+=0.42) for (let z=-2.3; z<-0.45; z+=0.42) {
+    const px=x+(r2()-0.5)*0.2, pz=z+(r2()-0.5)*0.2;
+    if (Math.abs(pz-PATH.z)<PATH.across/2+0.15) continue;
+    DESIGN_PLANTS.push({sp:MIX[(r2()*MIX.length)|0], x:px, z:pz, rot:r2()*Math.PI*2});
+  }
+}
+
 // ---------- Spec cards ----------
 const INFO = [
   {name:'Pozemek', d:`cca 34,5 × 35,8 m, výměra cca ${fmt(area(P)+area(RAMP))} m², zahrada asi 0,9 m nad ulicí`, src:'Letecký snímek', k:'photo'},
@@ -177,6 +224,8 @@ const INFO = [
   {name:'Příjezd a dlažba', d:`šířka u garáže 8,1 m, u ulice cca 6,5 m, sklon 9,1 %, celkem cca ${fmt(area(DRIVE)+area(RAMP)+area(PATIO))} m²`, src:'Situace a snímek', k:'draw'},
   {name:'Trávník', d:`cca ${fmt(area(LAWN)-area(HOUSE)-area(DECK_EDGE)-21)} m² bez domu a terasy`, src:'Letecký snímek', k:'photo'},
   {name:'Záhony', d:`cca ${fmt(bedArea)} m²: trávy, astry, keře, kameny, 2 vyvýšené záhony u severní hranice`, src:'Snímek a fotky, rostliny orientačně', k:'est'},
+  {name:'Návrh: rozšíření záhonu', d:`2 záhony 12 a 6 m × 1 m podél západního plotu, ${PLAN_BEDS.reduce((s,b)=>s+b.back.length+b.front.length,0)} trvalek z osazovacího plánu (10 druhů)`, src:'Osazovací plán, poloha odhadem', k:'est'},
+  {name:'Návrh: cesta za domem', d:'nášlapné betonové desky 1,0 × 0,4 m, trvalky v mulči, štěrkový pruh u zdi, vyvýšené záhony u plotu', src:'Inspirace, rozměry odhadem', k:'est'},
   {name:'Oplocení', d:'zeď z betonových tvárnic a pole z dřevěných lamel, cca 1,6 m od chodníku', src:'Fotky, výška odhadem', k:'est'}
 ];
 const listEl = document.getElementById('list');
@@ -501,6 +550,21 @@ function build(renderer){
     });
     im.castShadow=true; im.receiveShadow=true; G.beds.add(im);
   });
+
+  // ----- Design layer: new beds, gravel, stepping stones, perennials -----
+  DESIGN_BEDS.forEach(b=>flat(G.design,b,0.02,MAT.soil));
+  flat(G.design,GRAVEL,0.025,M('#d9d7d0',{name:'gravel'}));
+  for(let x=PATH.x0;x<PATH.x1;x+=PATH.along+PATH.gap)
+    box(G.design,x,x+PATH.along,0,0.06,PATH.z-PATH.across/2,PATH.z+PATH.across/2,M('#b9bab6',{name:'slab'}));
+  {
+    const geo=new THREE.SphereGeometry(1,10,8), im=new THREE.InstancedMesh(geo,M('#ffffff'),DESIGN_PLANTS.length);
+    DESIGN_PLANTS.forEach((p,i)=>{
+      const s=SPECIES[p.sp];
+      dummy.position.set(p.x,s.h*0.45,p.z); dummy.rotation.set(0,p.rot,0); dummy.scale.set(s.d/2,s.h/2,s.d/2);
+      dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); im.setColorAt(i,col.set(s.flower||s.leaf));
+    });
+    im.castShadow=true; im.receiveShadow=true; G.design.add(im);
+  }
 
   // ----- Trees -----
   function deciduous(x,z,h,r,c){

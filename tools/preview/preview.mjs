@@ -14,7 +14,7 @@ fs.mkdirSync(outDir, { recursive: true });
 const three = fs.readFileSync('node_modules/three/build/three.min.js');
 const orbit = fs.readFileSync('node_modules/three/examples/js/controls/OrbitControls.js');
 
-const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ channel: process.env.PW_CHANNEL, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1100, height: 1300 } });
 const errors = [];
 page.on('pageerror', e => errors.push(String(e)));
