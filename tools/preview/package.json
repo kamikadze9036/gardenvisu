@@ -1,0 +1,13 @@
+{
+  "name": "gardenvisu-preview",
+  "private": true,
+  "type": "module",
+  "description": "Headless screenshots of the garden model",
+  "scripts": {
+    "preview": "node preview.mjs ../../index.html out"
+  },
+  "dependencies": {
+    "playwright": "1.47.2",
+    "three": "0.128.0"
+  }
+}

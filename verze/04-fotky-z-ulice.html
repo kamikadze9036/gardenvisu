@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="cs">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zahrada podle snímku</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column. 3D stage on top, layer toggles and a spec list below. */
+:root{
+  --bg:#f4f3ee; --fg:#22281f; --muted:#67705f; --accent:#4d6b3a;
+  --panel:#ffffff; --line:#d8d6cb; --on:#ffffff;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161a14; --fg:#e6e9de; --muted:#9aa390; --accent:#9bc27f;
+    --panel:#1e241b; --line:#323b2d; --on:#161a14; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161a14; --fg:#e6e9de; --muted:#9aa390; --accent:#9bc27f;
+  --panel:#1e241b; --line:#323b2d; --on:#161a14; color-scheme: dark;
+}
+body{background:var(--bg);color:var(--fg);font-family:Figtree,system-ui,sans-serif;margin:0}
+.wrap{max-width:960px;margin:0 auto;padding:20px 16px 32px;box-sizing:border-box}
+h1{font-family:Fraunces,Georgia,serif;font-weight:600;font-size:1.6rem;margin:0 0 4px;text-wrap:balance}
+.sub{color:var(--muted);margin:0 0 16px;font-size:.95rem}
+#stage{position:relative;width:100%;height:min(62vh,520px);min-height:300px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#d6cfbf}
+#stage canvas{display:block;width:100%;height:100%}
+#msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;color:#22281f;font-size:.95rem}
+#msg:empty{display:none}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+button{font:inherit;font-size:.92rem;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+button[aria-pressed="true"]{background:var(--accent);color:var(--on);border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.card b{display:block;font-weight:600;margin-bottom:2px}
+.card span{color:var(--muted);font-size:.9rem;font-variant-numeric:tabular-nums}
+.note{color:var(--muted);font-size:.88rem;margin:16px 0 0}
+</style>
+
+<div class="wrap">
+  <h1>Zahrada podle snímku</h1>
+  <p class="sub">Verze 3: dům se sedlovou střechou, garáž, zastřešená terasa, betonová zeď se dřevěným plotem a záhony s trávami.</p>
+
+  <div id="stage"><div id="msg"></div></div>
+
+  <div class="bar" role="group" aria-label="Pohled">
+    <button id="v-persp" aria-pressed="true">Perspektiva</button>
+    <button id="v-top" aria-pressed="false">Pohled shora</button>
+  </div>
+  <div class="bar" id="layers" role="group" aria-label="Vrstvy"></div>
+  <div class="grid" id="list"></div>
+  <p class="note">Rozměry jsou odhadnuté z lišty na snímku a z poměrů na fotkách. Výška domu (cca 9,4 m k hřebeni) je odhad podle typického dvoupodlažního domu, ne změřená hodnota.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// Coordinates in metres. Origin = NW corner of the house. x runs east, z runs south.
+const ITEMS = [
+  {key:'house',   name:'Dům',                    dims:'15 × 11,7 m, 2 podlaží, sedlová střecha, výška hřebene cca 9,4 m'},
+  {key:'garage',  name:'Garáž',                  dims:'8,5 × 8,7 m, plochá střecha, tmavá sekční vrata'},
+  {key:'deck',    name:'Terasa a zastřešený bazén', dims:'terasa 11,5 × 5,5 m, přesah střechy nad terasou'},
+  {key:'drive',   name:'Příjezd',                dims:'světlá dlažba, cca 90 m²'},
+  {key:'lawn',    name:'Trávník',                dims:'cca 26 × 30 m, mírný svah k jihu'},
+  {key:'beds',    name:'Záhony a trávy',         dims:'pásy okrasných trav, fialových květin a keřů'},
+  {key:'trees',   name:'Stromy',                 dims:'1 listnatý, 1 jehličnatý'},
+  {key:'fence',   name:'Zeď a dřevěný plot',     dims:'betonová zeď 1,2 m, dřevěné lamely nad ní do cca 1,9 m'}
+];
+const PERSP = [-8, 26, 40], TOP = [11, 60, 14.01], TARGET = [11, 0, 14];
+
+const stage = document.getElementById('stage');
+const msg = document.getElementById('msg');
+
+if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
+  msg.textContent = 'Knihovnu Three.js se nepodařilo načíst.';
+} else {
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({antialias: true});
+  } catch (e) {
+    msg.textContent = 'Tento prohlížeč nepodporuje WebGL, 3D náhled nelze zobrazit.';
+  }
+
+  if (renderer) {
+    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    stage.insertBefore(renderer.domElement, msg);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#d6e2ea');
+
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 400);
+    camera.position.set(...PERSP);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(...TARGET);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05;
+    controls.update();
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a5a, 0.9));
+    const sun = new THREE.DirectionalLight(0xfff3dc, 1.1);
+    sun.position.set(-20, 36, 10);
+    sun.target.position.set(...TARGET);
+    scene.add(sun.target);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(sun.shadow.camera, {left: -35, right: 35, top: 35, bottom: -35, far: 150});
+    scene.add(sun);
+
+    const mat = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({color: c, roughness: 0.9}, o));
+    const add = (g, m) => { m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
+
+    // Box given by its footprint (x0..x1, z0..z1) and its vertical span (y0, height)
+    const box2 = (g, x0, x1, z0, z1, y0, h, c, o) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h, z1 - z0), mat(c, o));
+      m.position.set((x0 + x1) / 2, y0 + h / 2, (z0 + z1) / 2);
+      return add(g, m);
+    };
+    const bush = (g, x, z, r, c) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), mat(c));
+      m.position.set(x, r * 0.8, z);
+      return add(g, m);
+    };
+    // Triangular gable end, extruded thin along x. Base is centred on zc, starting at y0.
+    const gable = (g, x0, thick, W, H, y0, zc, c) => {
+      const s = new THREE.Shape();
+      s.moveTo(-W / 2, 0); s.lineTo(W / 2, 0); s.lineTo(0, H); s.closePath();
+      const m = new THREE.Mesh(new THREE.ExtrudeGeometry(s, {depth: thick, bevelEnabled: false}), mat(c));
+      m.rotation.y = Math.PI / 2;
+      m.position.set(x0, y0, zc);
+      return add(g, m);
+    };
+
+    const G = {};
+    ITEMS.forEach(i => { G[i.key] = new THREE.Group(); scene.add(G[i.key]); });
+
+    // Ground outside the plot (pavement and road)
+    const outside = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), mat('#d6cfbf'));
+    outside.rotation.x = -Math.PI / 2;
+    outside.position.set(11, -0.02, 14);
+    outside.receiveShadow = true;
+    scene.add(outside);
+
+    // Lawn over the whole plot
+    const lawn = new THREE.Mesh(new THREE.PlaneGeometry(26, 30), mat('#6f9a4a'));
+    lawn.rotation.x = -Math.PI / 2;
+    lawn.position.set(9.5, 0.01, 12.8);
+    lawn.receiveShadow = true;
+    G.lawn.add(lawn);
+
+    // House: two storeys, gable roof with a central dormer and roof windows
+    const WALL_H = 6.2, RIDGE = 3.2, ZC = 5.85;
+    box2(G.house, 0, 15, 0, 11.7, 0, WALL_H, '#ececE6');
+    gable(G.house, 0, 0.25, 11.7, RIDGE, WALL_H, ZC, '#ececE6');
+    gable(G.house, 14.75, 0.25, 11.7, RIDGE, WALL_H, ZC, '#ececE6');
+    const slopeLen = Math.sqrt(RIDGE * RIDGE + (11.7 / 2) * (11.7 / 2));
+    const ang = Math.atan(RIDGE / (11.7 / 2));
+    const sy = WALL_H + RIDGE / 2;
+    const southSlope = box2(G.house, 0, 0, 0, 0, 0, 0, '#000');
+    G.house.remove(southSlope);
+    [[+1, ang], [-1, -ang]].forEach(([side, a]) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(15, 0.3, slopeLen), mat('#2c3034'));
+      m.position.set(7.5, sy + 0.12, ZC + side * (11.7 / 4));
+      m.rotation.x = a;
+      add(G.house, m);
+    });
+    // Central dormer on the south slope, with a dark glass front
+    box2(G.house, 6.0, 8.4, 9.4, 11.2, 7.3, 1.5, '#ececE6');
+    box2(G.house, 6.2, 8.2, 11.2, 11.26, 7.5, 1.0, '#2f3a44', {roughness: 0.3, metalness: 0.3});
+    // Roof windows on the north slope
+    [3.0, 5.2, 11.0].forEach(x => box2(G.house, x, x + 0.9, 2.5, 3.4, 8.0, 0.1, '#9fb4c2', {roughness: 0.3}));
+    // Glazed living room on the south face, under a dark canopy above the terrace
+    box2(G.house, 2.0, 9.0, 11.7, 11.78, 0.2, 2.6, '#2f3a44', {roughness: 0.3, metalness: 0.3});
+    [1.6, 9.4].forEach(x => box2(G.house, x - 0.1, x + 0.1, 12.6, 12.8, 0, 3.0, '#3a3f46'));
+    box2(G.house, 1.2, 9.8, 11.7, 13.5, 3.0, 0.25, '#3a3f46');
+    // Upper windows on the south face
+    [10.5].forEach(x => box2(G.house, x, x + 1.2, 11.7, 11.76, 3.5, 1.2, '#2f3a44', {roughness: 0.3}));
+
+    // Garage on the east side: flat roof, dark sectional door on the south face
+    box2(G.garage, 15.0, 23.5, 4.3, 13.0, 0, 3.3, '#ececE6');
+    box2(G.garage, 14.9, 23.7, 4.2, 13.2, 3.3, 0.2, '#3a3f46');
+    box2(G.garage, 16.2, 22.3, 12.98, 13.02, 0.05, 2.5, '#5a6066', {roughness: 0.5});
+    box2(G.garage, 20.8, 22.3, 7.5, 8.2, 1.4, 0.8, '#2f3a44', {roughness: 0.3});
+
+    // Terrace and covered pool: timber deck, glass pool cover
+    box2(G.deck, 0, 11.5, 11.7, 17.2, 0, 0.12, '#a08868');
+    box2(G.deck, 11.5, 14.6, 12.8, 16.3, 0, 0.12, '#cfc8b8');
+    box2(G.deck, 0.6, 7.3, 12.8, 16.2, 0.12, 0.05, '#4f8aa0', {roughness: 0.2, metalness: 0.1});
+    box2(G.deck, 0.6, 7.3, 12.8, 16.2, 0.17, 0.05, '#bfe3ea', {transparent: true, opacity: 0.45, roughness: 0.1});
+    box2(G.deck, 0.6, 7.3, 12.8, 12.9, 0.05, 0.12, '#dfe5ea', {roughness: 0.4});
+    box2(G.deck, 0.6, 7.3, 16.1, 16.2, 0.05, 0.12, '#dfe5ea', {roughness: 0.4});
+
+    // Driveway: light paving, two sections, from the garage to the street
+    box2(G.drive, 14.9, 22.1, 13.0, 20.0, 0, 0.1, '#e6e4dc');
+    box2(G.drive, 18.0, 22.1, 20.0, 30.0, 0, 0.1, '#e6e4dc');
+
+    // Beds, grasses and hedges: south slope, east strip, west hedge, two planters in the north
+    box2(G.beds, -3.5, 19.0, 21.0, 24.0, 0, 0.1, '#5b4a38');
+    for (let x = -3; x < 19; x += 1.1) {
+      const c = (Math.round(x * 3) % 3 === 0) ? '#8a5a9a' : ((Math.round(x * 3) % 3 === 1) ? '#c8b07a' : '#44603a');
+      bush(G.beds, x, 22.5, 0.6, c);
+    }
+    box2(G.beds, 21.6, 23.2, 2, 22, 0, 0.1, '#5b4a38');
+    for (let z = 2.5; z < 22; z += 1.1) bush(G.beds, 22.4, z, 0.6, '#44603a');
+    box2(G.beds, -5.4, -3.5, -1, 22, 0, 0.1, '#5b4a38');
+    for (let z = -0.5; z < 22; z += 1.1) bush(G.beds, -4.6, z, 0.9, '#3d5a33');
+    [[13.2, 15.3], [16.0, 19.6]].forEach(([x0, x1]) => {
+      box2(G.beds, x0, x1, -3.3, -1.7, 0, 0.4, '#7a5c3e');
+      box2(G.beds, x0 + 0.15, x1 - 0.15, -3.15, -1.85, 0.4, 0.05, '#4b3a2a');
+      box2(G.beds, x0 + 0.3, x1 - 0.3, -3.0, -2.0, 0.45, 0.25, '#5f8a45');
+    });
+
+    // Trees: deciduous in the south-east corner, conifer west of the terrace
+    const trunk = add(G.trees, new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 2.2, 8), mat('#6b4a2f')));
+    trunk.position.set(23.0, 1.1, 27.5);
+    const canopy = add(G.trees, new THREE.Mesh(new THREE.SphereGeometry(1.5, 20, 16), mat('#56803f')));
+    canopy.position.set(23.0, 3.3, 27.5);
+    bush(G.trees, 20.6, 25.2, 0.6, '#4f7a3a');
+    const conTrunk = add(G.trees, new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 1.0, 8), mat('#5a4030')));
+    conTrunk.position.set(-2.5, 0.5, 8.5);
+    const cone = add(G.trees, new THREE.Mesh(new THREE.ConeGeometry(1.4, 3.6, 12), mat('#2f5a3a')));
+    cone.position.set(-2.5, 2.8, 8.5);
+
+    // Boundary: grey concrete wall (1,2 m) with wooden slats above it on the east and south,
+    // and a solid wooden fence on the north
+    const WOOD = '#9a7448', WALLC = '#5d6166';
+    box2(G.fence, -5.6, 23.6, 30.5, 30.9, 0, 1.2, WALLC);
+    for (let i = 0; i < 6; i++) box2(G.fence, -5.6, 23.6, 30.5, 30.56, 1.3 + i * 0.1, 0.06, WOOD);
+    box2(G.fence, 23.2, 23.6, -3.5, 30.5, 0, 1.2, WALLC);
+    for (let i = 0; i < 6; i++) box2(G.fence, 23.2, 23.6, -3.5, 30.5, 1.3 + i * 0.1, 0.06, WOOD);
+    box2(G.fence, -5.6, 23.6, -3.8, -3.7, 0, 1.6, WOOD);
+
+    // Layer toggles and spec cards
+    const layersEl = document.getElementById('layers');
+    const listEl = document.getElementById('list');
+    ITEMS.forEach(i => {
+      const b = document.createElement('button');
+      b.textContent = i.name;
+      b.setAttribute('aria-pressed', 'true');
+      b.onclick = () => {
+        G[i.key].visible = !G[i.key].visible;
+        b.setAttribute('aria-pressed', String(G[i.key].visible));
+      };
+      layersEl.appendChild(b);
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = '<b></b><span></span>';
+      card.querySelector('b').textContent = i.name;
+      card.querySelector('span').textContent = i.dims;
+      listEl.appendChild(card);
+    });
+
+    // Views: animate the camera to a goal, then give control back to the user
+    let goal = null;
+    const pTop = document.getElementById('v-top'), pPersp = document.getElementById('v-persp');
+    function setView(top) {
+      goal = new THREE.Vector3(...(top ? TOP : PERSP));
+      controls.maxPolarAngle = top ? Math.PI : Math.PI / 2 - 0.05;
+      pTop.setAttribute('aria-pressed', String(top));
+      pPersp.setAttribute('aria-pressed', String(!top));
+    }
+    pPersp.onclick = () => setView(false);
+    pTop.onclick = () => setView(true);
+
+    function resize() {
+      const w = stage.clientWidth, h = stage.clientHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    new ResizeObserver(resize).observe(stage);
+    resize();
+
+    renderer.setAnimationLoop(() => {
+      if (goal) {
+        camera.position.lerp(goal, 0.08);
+        if (camera.position.distanceTo(goal) < 0.02) goal = null;
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    });
+  }
+}
+</script>
+
+</html>

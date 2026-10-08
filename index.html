@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="cs">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zahrada podle snímku</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column. 3D stage on top, views and layer toggles under it, then a sourced spec list. */
+:root{
+  --bg:#f4f3ee; --fg:#22281f; --muted:#67705f; --accent:#4d6b3a;
+  --panel:#ffffff; --line:#d8d6cb; --on:#ffffff;
+  --chip-draw:#e3ecdb; --chip-photo:#efe7d6; --chip-est:#ece9e4;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161a14; --fg:#e6e9de; --muted:#9aa390; --accent:#9bc27f;
+    --panel:#1e241b; --line:#323b2d; --on:#161a14;
+    --chip-draw:#2a3a24; --chip-photo:#3a3324; --chip-est:#2e2f2b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161a14; --fg:#e6e9de; --muted:#9aa390; --accent:#9bc27f;
+  --panel:#1e241b; --line:#323b2d; --on:#161a14;
+  --chip-draw:#2a3a24; --chip-photo:#3a3324; --chip-est:#2e2f2b; color-scheme: dark;
+}
+body{background:var(--bg);color:var(--fg);font-family:Figtree,system-ui,sans-serif;margin:0}
+.wrap{max-width:1040px;margin:0 auto;padding:20px 16px 32px;box-sizing:border-box}
+h1{font-family:Fraunces,Georgia,serif;font-weight:600;font-size:1.6rem;margin:0 0 4px;text-wrap:balance}
+.sub{color:var(--muted);margin:0 0 16px;font-size:.95rem;max-width:68ch}
+#stage{position:relative;width:100%;height:min(66vh,600px);min-height:320px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#cfdde6}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none}
+#msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;color:#22281f;font-size:.95rem}
+#msg:empty{display:none}
+.lbl{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:16px 0 6px}
+.bar{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.9rem;padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+button[aria-pressed="true"]{background:var(--accent);color:var(--on);border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0;display:flex;flex-direction:column;gap:4px}
+.card b{font-weight:600}
+.card span.d{color:var(--muted);font-size:.9rem;font-variant-numeric:tabular-nums}
+.src{align-self:flex-start;font-size:.72rem;letter-spacing:.03em;padding:2px 8px;border-radius:999px;margin-top:4px;color:var(--fg)}
+.src.draw{background:var(--chip-draw)} .src.photo{background:var(--chip-photo)} .src.est{background:var(--chip-est)}
+.note{color:var(--muted);font-size:.88rem;margin:16px 0 0;max-width:72ch}
+</style>
+
+<div class="wrap">
+  <h1>Zahrada podle snímku</h1>
+  <p class="sub">Rodinný dům a zahrada. Stavba podle projektové dokumentace (půdorysy, pohledy, řezy, situace), zahrada podle leteckého snímku s měřítkem a fotek z ulice. Tažením otáčíte, kolečkem nebo dvěma prsty přibližujete.</p>
+
+  <div id="stage"><div id="msg"></div></div>
+
+  <div class="lbl">Pohled</div>
+  <div class="bar" id="views" role="group" aria-label="Pohled"></div>
+  <div class="lbl">Vrstvy</div>
+  <div class="bar" id="layers" role="group" aria-label="Vrstvy"></div>
+
+  <div class="grid" id="list"></div>
+  <p class="note">Štítek u každé položky říká, odkud údaj pochází. Výkres a situace jsou přesné. Hodnoty ze snímku jsou odečtené z měřítka, takže se mohou lišit asi o půl metru. Druhy a rozmístění rostlin v záhonech jsou orientační.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// World units are metres. Origin = north-west outer corner of the house.
+// x runs east along the house, z runs south toward the street, y is up. Heights are relative to the ground floor 0,000.
+
+// ---------- Site data ----------
+// Plot boundary, clockwise from NW. Taken from the aerial photo with its 0–12 m scale bar.
+const P = [
+  [-5.66,-4.70],[22.99,-4.70],[23.17,0.64],[28.86,6.87],[28.86,29.64],[27.60,31.07],
+  [24.90,31.07],[23.70,23.20],[18.40,23.20],[18.40,31.07],          // driveway ramp notch
+  [5.02,31.07],[-1.03,24.48],[-5.66,24.48]
+];
+const LAWN = [
+  [-3.88,-2.56],[22.99,-2.56],[22.99,1.17],[27.62,6.87],[27.62,23.59],[26.73,25.02],[25.48,25.20],
+  [24.23,23.95],[23.70,23.24],[23.70,13.45],[14.80,16.83],[16.58,18.97],[17.30,21.46],[16.58,23.24],
+  [14.45,25.37],[11.60,27.33],[8.40,27.51],[5.91,26.09],[3.42,23.95],[0.57,22.88],[-2.63,21.81],[-3.88,20.39]
+];
+const DRIVE = [[14.9,12.8],[23.5,12.8],[23.7,23.2],[18.4,23.2],[14.4,16.8],[12.6,14.0],[12.6,13.45],[14.9,13.45]];
+const RAMP  = [[18.4,23.2],[23.7,23.2],[24.9,31.07],[18.4,31.07]];
+const PATIO = [[11.4,8.65],[11.78,8.65],[11.78,7.55],[14.9,7.55],[14.9,13.45],[12.6,14.0],[14.3,17.1],[13.0,18.4],[10.6,17.4],[10.6,13.8],[11.4,13.8]];
+const DECK  = [[-0.3,7.55],[7.93,7.55],[7.93,8.65],[11.4,8.65],[11.4,13.8],[10.6,13.8],[10.6,17.4],[-0.3,17.4]];
+const DECK_EDGE = [[-0.65,7.4],[7.93,7.4],[7.93,8.65],[11.75,8.65],[11.75,14.15],[10.95,14.15],[10.95,17.75],[-0.65,17.75]];
+const POOL  = [[0.5,12.9],[7.0,12.9],[7.0,16.5],[0.5,16.5]];
+const HOUSE = [[0,0],[14.9,0],[14.9,8.65],[0,8.65]];
+const GARAGE= [[14.9,4.3],[23.0,4.3],[23.0,12.8],[14.9,12.8]];
+const PLANTERS = [[13.2,15.5],[16.1,20.0]]; // x ranges, z -3.8 .. -2.4
+
+const H = {eave:4.15, ridge:7.72, garage:2.97, street:-0.9, wallTop:0.7};
+
+const VIEWS = [
+  {key:'bird',   name:'Ptačí pohled', pos:[-12,30,55],  tgt:[11.6,0,13.2]},
+  {key:'street', name:'Z ulice',  pos:[8,1.7,39.5], tgt:[9,2.4,10]},
+  {key:'terrace',name:'Z terasy',     pos:[3.5,1.75,10.6], tgt:[11,0.6,26]},
+  {key:'top',    name:'Shora',        pos:[11.6,78,13.21], tgt:[11.6,0,13.2]}
+];
+const LAYERS = [
+  {key:'house',   name:'Dům'},
+  {key:'garage',  name:'Garáž'},
+  {key:'terrace', name:'Terasa a bazén'},
+  {key:'paving',  name:'Příjezd a dlažba'},
+  {key:'lawn',    name:'Trávník'},
+  {key:'beds',    name:'Záhony'},
+  {key:'trees',   name:'Stromy'},
+  {key:'fence',   name:'Oplocení'},
+  {key:'context', name:'Okolí'},
+  {key:'grid',    name:'Mřížka 1 m', off:true}
+];
+
+// ---------- Geometry helpers that need no WebGL ----------
+const area = poly => Math.abs(poly.reduce((s,[x,z],i)=>{const [x2,z2]=poly[(i+1)%poly.length];return s+x*z2-x2*z;},0))/2;
+function inPoly(x,z,poly){
+  let c=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const [xi,zi]=poly[i],[xj,zj]=poly[j];
+    if(((zi>z)!==(zj>z)) && (x < (xj-xi)*(z-zi)/(zj-zi)+xi)) c=!c;
+  }
+  return c;
+}
+function distSeg(x,z,[ax,az],[bx,bz]){
+  const dx=bx-ax,dz=bz-az,t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz)));
+  return Math.hypot(x-(ax+t*dx),z-(az+t*dz));
+}
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const fmt = n => n.toLocaleString('cs-CZ',{maximumFractionDigits:0});
+
+// Bed planting: jittered grid over the plot, kept where it isn't lawn, paving, deck or a building.
+const rand = rng(42);
+const BLOCKED = [LAWN, DRIVE, RAMP, PATIO, DECK_EDGE, HOUSE, GARAGE];
+const PLANTS = [];
+let bedCells = 0;
+const STEP = 0.72;
+for (let gx=-5.6; gx<28.9; gx+=STEP) for (let gz=-4.7; gz<31.1; gz+=STEP) {
+  const x = gx + (rand()-0.5)*0.5, z = gz + (rand()-0.5)*0.5;
+  if (!inPoly(x,z,P)) continue;
+  if (BLOCKED.some(p=>inPoly(x,z,p))) continue;
+  if (z>-3.95 && z<-2.25 && PLANTERS.some(([a,b])=>x>a-0.2&&x<b+0.2)) continue;
+  bedCells++;
+  let near=false;
+  for (let i=0;i<P.length;i++) if (distSeg(x,z,P[i],P[(i+1)%P.length])<0.35) {near=true;break;}
+  if (near) continue;
+  const zone = x<-3.6 ? 'west' : z<-2.4 ? 'north' : (x>23.6&&z>23) ? 'rock' : (x>27||(x>22.9&&z<7)) ? 'east' : 'south';
+  const MIX = {
+    west: [['green',.6,.6,1.1],['grass',.25,.4,.6],['burg',.15,.5,.8]],
+    north:[['green',.45,.3,.6],['grass',.35,.3,.5],['purple',.2,.25,.4]],
+    south:[['grass',.35,.35,.6],['purple',.2,.3,.45],['burg',.12,.4,.7],['green',.25,.3,.6],['rock',.08,.2,.4]],
+    rock: [['rock',.4,.2,.5],['grass',.25,.3,.5],['green',.35,.25,.45]],
+    east: [['green',.5,.3,.55],['purple',.2,.25,.4],['grass',.3,.3,.5]]
+  }[zone];
+  let r=rand(), pick=MIX[MIX.length-1];
+  for (const m of MIX){ if(r<m[1]){pick=m;break;} r-=m[1]; }
+  PLANTS.push({type:pick[0], x, z, r: 0.72*(pick[2]+rand()*(pick[3]-pick[2])), rot: rand()*Math.PI*2, c: rand()});
+}
+const bedArea = bedCells*STEP*STEP;
+
+// ---------- Spec cards ----------
+const INFO = [
+  {name:'Pozemek', d:`cca 34,5 × 35,8 m, výměra cca ${fmt(area(P)+area(RAMP))} m², zahrada asi 0,9 m nad ulicí`, src:'Letecký snímek', k:'photo'},
+  {name:'Dům', d:'14,9 × 8,65 m, okap +4,15 m, hřeben +7,72 m, komín +8,37 m, sklon cca 40°. Obývák a vchod zapuštěné 1,1 m pod patrem, vikýř 2,0 m, 6 střešních oken', src:'Výkresy, pohledy a řezy', k:'draw'},
+  {name:'Garáž', d:'8,1 × 8,5 m, atika +2,97 m, sekční vrata 6,9 × 2,4 m s brankou, fotovoltaika na střeše', src:'Výkresy a pohledy', k:'draw'},
+  {name:'Krytá terasa', d:'pergola 7,9 × 2,05 m ve výšce +2,27 až +2,45 m na třech sloupcích, pod ní ještě 1,1 m zapuštěné lodžie', src:'Výkresy a pohledy', k:'draw'},
+  {name:'Dřevěná terasa a bazén', d:`terasa cca ${fmt(area(DECK)-area(POOL))} m², bazén cca 6,5 × 3,6 m s posuvným zastřešením`, src:'Letecký snímek', k:'photo'},
+  {name:'Příjezd a dlažba', d:`šířka u garáže 8,1 m, u ulice cca 6,5 m, sklon 9,1 %, celkem cca ${fmt(area(DRIVE)+area(RAMP)+area(PATIO))} m²`, src:'Situace a snímek', k:'draw'},
+  {name:'Trávník', d:`cca ${fmt(area(LAWN)-area(HOUSE)-area(DECK_EDGE)-21)} m² bez domu a terasy`, src:'Letecký snímek', k:'photo'},
+  {name:'Záhony', d:`cca ${fmt(bedArea)} m²: trávy, astry, keře, kameny, 2 vyvýšené záhony u severní hranice`, src:'Snímek a fotky, rostliny orientačně', k:'est'},
+  {name:'Oplocení', d:'zeď z betonových tvárnic a pole z dřevěných lamel, cca 1,6 m od chodníku', src:'Fotky, výška odhadem', k:'est'}
+];
+const listEl = document.getElementById('list');
+INFO.forEach(i=>{
+  const c=document.createElement('div'); c.className='card';
+  const b=document.createElement('b'); b.textContent=i.name;
+  const d=document.createElement('span'); d.className='d'; d.textContent=i.d;
+  const s=document.createElement('span'); s.className='src '+i.k; s.textContent=i.src;
+  c.append(b,d,s); listEl.appendChild(c);
+});
+
+// ---------- 3D scene ----------
+const stage = document.getElementById('stage');
+const msg = document.getElementById('msg');
+
+if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
+  msg.textContent = 'Knihovnu Three.js se nepodařilo načíst. Zkuste stránku obnovit.';
+} else {
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({antialias:true}); }
+  catch(e){ msg.textContent = 'Tento prohlížeč nepodporuje WebGL, 3D náhled nelze zobrazit.'; }
+  if (renderer) build(renderer);
+}
+
+function build(renderer){
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  stage.insertBefore(renderer.domElement, msg);
+  const ANISO = renderer.capabilities.getMaxAnisotropy();
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#cfdde6');
+  scene.fog = new THREE.Fog('#cfdde6', 90, 220);
+
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
+  camera.position.set(...VIEWS[0].pos);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(...VIEWS[0].tgt);
+  controls.enableDamping = true;
+  controls.maxPolarAngle = Math.PI/2 - 0.02;
+  controls.minDistance = 2; controls.maxDistance = 160;
+  controls.update();
+
+  scene.add(new THREE.HemisphereLight(0xf4f8ff, 0x7d6e55, 0.6));
+  const sun = new THREE.DirectionalLight(0xfff1d8, 0.95);
+  sun.position.set(-14, 34, 38);
+  sun.target.position.set(11.6,0,13.2);
+  scene.add(sun.target);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048,2048);
+  sun.shadow.bias = -0.0004;
+  Object.assign(sun.shadow.camera,{left:-32,right:32,top:32,bottom:-32,near:1,far:120});
+  scene.add(sun);
+
+  // ----- Canvas textures (everything drawn here, nothing fetched) -----
+  function tex(w,h,draw,rep){
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const g=c.getContext('2d'); draw(g,w,h);
+    const t=new THREE.CanvasTexture(c);
+    t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=ANISO;
+    if(rep) t.repeat.set(rep[0],rep[1]);
+    return t;
+  }
+  const tr = rng(11);
+  const speckle=(g,w,h,n,cols,s)=>{for(let i=0;i<n;i++){g.fillStyle=cols[(tr()*cols.length)|0];g.fillRect(tr()*w,tr()*h,s,s);}};
+  const T = {
+    lawn: tex(64,128,(g,w,h)=>{g.fillStyle='#55803a';g.fillRect(0,0,w,h/2);g.fillStyle='#5f8b41';g.fillRect(0,h/2,w,h/2);speckle(g,w,h,900,['#4e7735','#679347','#5a853d'],1);},[1/3,1/2.6]),
+    soil: tex(128,128,(g,w,h)=>{g.fillStyle='#5f4b39';g.fillRect(0,0,w,h);speckle(g,w,h,1400,['#6e5843','#53412f','#7a6450','#4a3a2b'],2);},[1/2,1/2]),
+    pave: tex(256,256,(g,w,h)=>{g.fillStyle='#b9b3a6';g.fillRect(0,0,w,h);const pw=w/2,ph=h/4;for(let r=0;r<4;r++)for(let c=-1;c<3;c++){const x=c*pw+(r%2?pw/2:0);const v=200+((tr()*22)|0);g.fillStyle=`rgb(${v},${v-4},${v-14})`;g.fillRect(x+2,r*ph+2,pw-4,ph-4);}},[1/1.2,1/1.2]),
+    stone: tex(256,256,(g,w,h)=>{g.fillStyle='#b8b0a0';g.fillRect(0,0,w,h);for(let i=0;i<14;i++){const v=205+((tr()*25)|0);g.fillStyle=`rgb(${v},${v-6},${v-18})`;g.fillRect(tr()*w,tr()*h,40+tr()*80,30+tr()*60);}speckle(g,w,h,600,['#c9c1b0','#a9a291'],2);},[1/1.6,1/1.6]),
+    deck: tex(256,256,(g,w,h)=>{const n=8,bh=h/n;for(let i=0;i<n;i++){const v=(tr()*18)|0;g.fillStyle=`rgb(${150+v},${100+v},${70+v})`;g.fillRect(0,i*bh,w,bh-3);g.fillStyle='#5b3f2b';g.fillRect(0,i*bh+bh-3,w,3);}speckle(g,w,h,500,['rgba(90,60,40,.35)','rgba(190,140,100,.3)'],2);},[1/1.12,1/1.12]),
+    block: tex(256,128,(g,w,h)=>{g.fillStyle='#4f5257';g.fillRect(0,0,w,h);const bw=w/4,bh=h/4;for(let r=0;r<4;r++)for(let c=-1;c<5;c++){const x=c*bw+(r%2?bw/2:0);const v=98+((tr()*16)|0);g.fillStyle=`rgb(${v},${v+2},${v+6})`;g.fillRect(x+2,r*bh+2,bw-4,bh-4);}speckle(g,w,h,800,['rgba(255,255,255,.08)','rgba(0,0,0,.12)'],2);}),
+    cobble: tex(256,256,(g,w,h)=>{g.fillStyle='#8f897d';g.fillRect(0,0,w,h);const cols=['#a8905a','#b39b63','#8e8b84','#9c988f','#b3ada0','#857d6c'];const cw=w/10,ch=h/20;for(let r=0;r<20;r++)for(let c=-1;c<11;c++){g.fillStyle=cols[(tr()*cols.length)|0];g.fillRect(c*cw+(r%2?cw/2:0)+1.5,r*ch+1.5,cw-3,ch-3);}},[1/2,1/2]),
+    field: tex(128,128,(g,w,h)=>{g.fillStyle='#7c8650';g.fillRect(0,0,w,h);speckle(g,w,h,1500,['#86905a','#6f7a46','#8f8c5c'],2);},[1/4,1/4])
+  };
+  const blockTex=(len,hgt)=>{const t=T.block.clone();t.needsUpdate=true;t.repeat.set(len/1.6,hgt/0.8);return t;};
+
+  const M = (c,o={}) => new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.9},o));
+  const MAT = {
+    wall:M('#f1f0eb',{roughness:.95}), roof:M('#34383d',{roughness:.75}), frame:M('#3a3e43',{roughness:.6,metalness:.2}),
+    glass:M('#2b3742',{roughness:.12,metalness:.45}), door:M('#5d6369',{roughness:.55,metalness:.2}),
+    groove:M('#4b5157',{roughness:.6}), sill:M('#9a9da0',{roughness:.7}), pv:M('#1d2838',{roughness:.25,metalness:.5}),
+    lawn:M('#ffffff',{map:T.lawn}), soil:M('#ffffff',{map:T.soil}), pave:M('#ffffff',{map:T.pave,polygonOffset:true,polygonOffsetFactor:-2}),
+    stone:M('#ffffff',{map:T.stone,polygonOffset:true,polygonOffsetFactor:-2}), deck:M('#ffffff',{map:T.deck}),
+    edge:M('#d9d5cc'), water:M('#3f8ba3',{roughness:.08,metalness:.25}),
+    cover:M('#d6edf3',{transparent:true,opacity:.38,roughness:.05,side:THREE.DoubleSide,depthWrite:false}),
+    alu:M('#c8ccd0',{roughness:.35,metalness:.6}), wood:M('#a8784b',{roughness:.8}), woodDark:M('#7a5a3c'),
+    cobble:M('#ffffff',{map:T.cobble}), field:M('#ffffff',{map:T.field}), neigh:M('#6a8848'),
+    mesh:M('#2f3b33',{transparent:true,opacity:.28,side:THREE.DoubleSide,depthWrite:false}), post:M('#2f3b33'),
+    pot:M('#3f4246'), cabinet:M('#ecebe6'), trunk:M('#5e4430')
+  };
+
+  const G = {};
+  LAYERS.forEach(l=>{G[l.key]=new THREE.Group(); scene.add(G[l.key]);});
+  G.grid.visible=false;
+  const base = new THREE.Group(); scene.add(base);
+
+  const shadow = m => {m.castShadow=true; m.receiveShadow=true; return m;};
+  function box(g,x0,x1,y0,y1,z0,z1,mat){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,y1-y0,z1-z0),mat);
+    m.position.set((x0+x1)/2,(y0+y1)/2,(z0+z1)/2); g.add(shadow(m)); return m;
+  }
+  const shapeOf = (poly, holes=[]) => {
+    const s=new THREE.Shape(poly.map(([x,z])=>new THREE.Vector2(x,-z)));
+    holes.forEach(h=>s.holes.push(new THREE.Path(h.map(([x,z])=>new THREE.Vector2(x,-z)))));
+    return s;
+  };
+  function flat(g,poly,y,mat,holes){
+    const m=new THREE.Mesh(new THREE.ShapeGeometry(shapeOf(poly,holes)),mat);
+    m.rotation.x=-Math.PI/2; m.position.y=y; m.receiveShadow=true; g.add(m); return m;
+  }
+  function slab(g,poly,y0,depth,mat,holes){
+    const m=new THREE.Mesh(new THREE.ExtrudeGeometry(shapeOf(poly,holes),{depth,bevelEnabled:false}),mat);
+    m.rotation.x=-Math.PI/2; m.position.y=y0; g.add(shadow(m)); return m;
+  }
+  // Thin box laid along a segment in plan
+  function along(g,[ax,az],[bx,bz],y0,y1,thick,mat,off=0){
+    const len=Math.hypot(bx-ax,bz-az), ang=Math.atan2(bz-az,bx-ax);
+    const nx=(bz-az)/len, nz=-(bx-ax)/len; // outward normal for a clockwise plot
+    const m=new THREE.Mesh(new THREE.BoxGeometry(len,y1-y0,thick),mat);
+    m.position.set((ax+bx)/2+nx*off,(y0+y1)/2,(az+bz)/2+nz*off);
+    m.rotation.y=-ang; g.add(shadow(m)); return m;
+  }
+  const lerp2=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+
+  // ----- Context: streets, neighbours, field -----
+  const street=new THREE.Mesh(new THREE.PlaneGeometry(160,160),MAT.cobble);
+  T.cobble.repeat.set(80,80);
+  street.rotation.x=-Math.PI/2; street.position.set(11.6,H.street,13.2); street.receiveShadow=true; G.context.add(street);
+  T.field.repeat.set(22,15);
+  box(G.context,-68,23.0,H.street,-0.02,-68,-4.85,MAT.field);
+  box(G.context,-68,-5.82,H.street,-0.02,-4.85,24.48,MAT.neigh);
+
+  // ----- Plot base: raised terrain block with mulch top (beds show this) -----
+  slab(base,P,H.street,-H.street,MAT.soil);
+
+  // ----- Lawn -----
+  flat(G.lawn,LAWN,0.012,MAT.lawn);
+
+  // ----- Paving -----
+  flat(G.paving,DRIVE,0.03,MAT.pave);
+  flat(G.terrace,PATIO,0.035,MAT.stone);
+  {
+    const [a,b,c,d]=RAMP, y0=0.03, y1=H.street+0.02;
+    const pos=[a[0],y0,a[1], b[0],y0,b[1], c[0],y1,c[1], a[0],y0,a[1], c[0],y1,c[1], d[0],y1,d[1]];
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+    const uv=[]; for(let i=0;i<pos.length;i+=3) uv.push(pos[i],-pos[i+2]);
+    geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+    geo.computeVertexNormals();
+    const ramp=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:T.pave,roughness:.9,side:THREE.DoubleSide}));
+    ramp.receiveShadow=true; G.paving.add(ramp);
+    // Low retaining edges either side of the ramp
+    const wm=new THREE.MeshStandardMaterial({map:blockTex(8,1),roughness:.9});
+    along(G.paving,[18.4,23.2],[18.4,31.07],H.street,0.12,0.2,wm,-0.1);
+    along(G.paving,[23.7,23.2],[24.9,31.07],H.street,0.12,0.2,wm,0.1);
+  }
+
+  // ----- House (drawings D.1.1.b_101, 102, 107, 109–112) -----
+  // Heights are relative to the ground floor 0,000; the house and garage groups sit 0,15 m above the lawn (terrain −0,150).
+  const F=0.15; G.house.position.y=F; G.garage.position.y=F;
+  const D=8.65, W=14.9, half=D/2, rise=H.ridge-H.eave, pitch=Math.atan(rise/half), slopeLen=Math.hypot(rise,half);
+  const SOFFIT=2.27, GLZ=7.55;   // underside of the upper floor over the recesses; line of the recessed glazing
+  // Ground floor: the living room (x 0–7,93) and the entrance (x 11,78–14,9) are recessed to z 7,55 under the upper floor;
+  // room 1.03 (x 7,93–11,78) comes forward to the façade line z 8,65.
+  box(G.house,0,W,0,SOFFIT,0,GLZ,MAT.wall);
+  box(G.house,7.93,11.78,0,SOFFIT,GLZ,D,MAT.wall);
+  box(G.house,0,W,SOFFIT,H.eave,0,D,MAT.wall);
+  const gableGeo=new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(-half,0),new THREE.Vector2(half,0),new THREE.Vector2(0,rise)]),{depth:0.3,bevelEnabled:false});
+  [0,W-0.3].forEach(x=>{const m=new THREE.Mesh(gableGeo,MAT.wall);m.rotation.y=Math.PI/2;m.position.set(x,H.eave,half);G.house.add(shadow(m));});
+  // Roof: no overhang on the gables, a minimal one at the eaves (concealed gutters)
+  const ov=0.08, RT=0.22;
+  const slopes=[+1,-1].map(side=>{
+    const piv=new THREE.Group(); piv.position.set(W/2,H.ridge-RT,half); piv.rotation.x=side*pitch; G.house.add(piv);
+    const sl=new THREE.Mesh(new THREE.BoxGeometry(W+0.06,RT,slopeLen+ov),MAT.roof);
+    sl.position.set(0,RT/2,side*(slopeLen+ov)/2); piv.add(shadow(sl));
+    return piv;
+  });
+  box(G.house,-0.03,W+0.03,H.ridge-0.06,H.ridge+0.04,half-0.13,half+0.13,MAT.frame); // ridge cap
+  // Roof windows 0,88 m wide, from 0,42 m to 2,0 m up the slope from the eave (s measured from the ridge)
+  const roofWin=(piv,x0,x1,dir)=>{
+    const l=1.58, s=dir*(slopeLen-0.42-l/2);
+    const fr=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,0.1,l),MAT.frame); fr.position.set((x0+x1)/2-W/2,RT+0.03,s); piv.add(fr);
+    const gl=new THREE.Mesh(new THREE.BoxGeometry(x1-x0-0.2,0.11,l-0.22),MAT.glass); gl.position.set((x0+x1)/2-W/2,RT+0.04,s); piv.add(gl);
+  };
+  // South slope (pohled JZ): O.17, double O.18, O.17
+  roofWin(slopes[0],1.45,2.33,1); roofWin(slopes[0],4.66,5.49,1); roofWin(slopes[0],5.56,6.39,1); roofWin(slopes[0],12.63,13.46,1);
+  // North slope (pohled SV): O.19 and O.16
+  roofWin(slopes[1],2.76,3.47,-1); roofWin(slopes[1],12.27,12.98,-1);
+  // Roof steps up the north slope to the chimney
+  for(let i=0;i<10;i++){const s=-(1.13+i*0.405); const st=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.04,0.06),MAT.alu); st.position.set(3.4-W/2,RT+0.06,s); slopes[1].add(st);}
+  // Box dormer (O.11), 2,0 m wide, front flush with the façade, clad in anthracite sheet
+  box(G.house,7.82,9.80,4.0,6.39,6.18,D,MAT.frame);
+  box(G.house,7.78,9.84,6.39,6.5,6.1,D+0.04,MAT.frame);
+  box(G.house,8.26,9.41,4.10,5.73,D,D+0.03,MAT.groove);
+  box(G.house,8.32,9.30,4.15,5.64,D+0.02,D+0.05,MAT.glass);
+  // Chimney on the north slope at the west end, top +8,370
+  box(G.house,3.73,4.24,6.0,8.30,2.38,2.83,MAT.frame);
+  box(G.house,3.68,4.29,8.30,8.37,2.33,2.88,MAT.sill);
+
+  // Window helper: dark frame plus inset glass, on a given façade
+  function opening(face,a0,a1,y0,y1,opt={}){
+    const t=0.06, fr=opt.frame??0.06, gm=opt.mat||MAT.glass;
+    const put=(u0,u1,v0,v1,d0,d1,m)=>{
+      if(face==='S') box(G.house,u0,u1,v0,v1,opt.z+d0,opt.z+d1,m);
+      if(face==='N') box(G.house,u0,u1,v0,v1,-d1,-d0,m);
+      if(face==='W') box(G.house,-d1,-d0,v0,v1,u0,u1,m);
+      if(face==='E') box(G.house,W+d0,W+d1,v0,v1,u0,u1,m);
+    };
+    put(a0,a1,y0,y1,0,t,MAT.frame);
+    put(a0+fr,a1-fr,y0+fr,y1-fr,t-0.02,t+0.01,gm);
+    (opt.mull||[]).forEach(m=>put(m-0.04,m+0.04,y0,y1,t-0.01,t+0.02,MAT.frame));
+  }
+  // South: living room glazing in the recess (fixed, sliding door O.03, steel column, fixed), window O.02 in room 1.03, entrance O.01 with sidelight
+  opening('S',0.45,7.82,0,SOFFIT,{z:GLZ,mull:[2.2,3.5]});
+  box(G.house,3.70,3.88,0,SOFFIT,GLZ,GLZ+0.18,MAT.frame);                       // steel column Ø121 clad in RAL 7016
+  box(G.house,0,0.45,0,SOFFIT,GLZ-0.3,GLZ+0.05,MAT.wall);                         // reinforced concrete pier at the corner
+  opening('S',9.58,10.20,0.10,2.26,{z:D});
+  for(let y=1.0;y<2.2;y+=0.09) box(G.house,9.62,10.16,y,y+0.05,D+0.07,D+0.09,MAT.groove); // exterior blind half down, as in the photos
+  opening('S',12.14,14.42,0,2.26,{z:GLZ,mull:[13.09]});
+  box(G.house,12.2,13.03,0,2.2,GLZ+0.03,GLZ+0.07,MAT.door);                       // entrance door leaf
+  box(G.house,11.78,W,SOFFIT-0.02,SOFFIT,GLZ,D,MAT.wall);
+  // West gable: double attic window, tall window, small kitchen window
+  opening('W',3.12,5.53,3.95,5.38,{mull:[4.32]});
+  opening('W',3.12,4.20,0,2.26);
+  opening('W',0.20,1.52,0.90,1.45);
+  // East gable: tall attic window with blind box above, tall ground-floor window north of the garage
+  opening('E',3.12,4.20,3.40,5.42);
+  box(G.house,W,W+0.1,5.42,5.62,3.08,4.24,MAT.frame);
+  opening('E',3.12,4.20,0,2.26);
+  // North: low kitchen window O.05 and the high ribbon windows O.06, O.07, O.08
+  opening('N',0.17,2.90,0.92,1.42);
+  box(G.house,0.12,2.95,0.86,0.92,-0.12,0,MAT.sill);
+  opening('N',8.35,10.20,1.65,2.17); opening('N',10.38,12.44,1.65,2.17); opening('N',12.63,13.74,1.65,2.17);
+
+  // ----- Garage: 8,1 × 8,5 m, floor −0,150, parapet +2,970, PV rows, sectional door G.01 -----
+  const [gx0,gx1,gz0,gz1]=[14.9,23.0,4.30,12.80];
+  box(G.garage,gx0,gx1,-F,2.8,gz0,gz1,MAT.wall);
+  box(G.garage,gx0+0.25,gx1-0.25,2.78,2.84,gz0+0.25,gz1-0.25,M('#4a4d50'));
+  [[gx0,gx1,gz0,gz0+0.25],[gx0,gx1,gz1-0.25,gz1],[gx0,gx0+0.25,gz0,gz1],[gx1-0.25,gx1,gz0,gz1]].forEach(([a,b,c,d])=>box(G.garage,a,b,2.8,H.garage,c,d,MAT.wall));
+  box(G.garage,gx0-0.02,gx1+0.02,H.garage-0.04,H.garage+0.01,gz0-0.02,gz1+0.02,MAT.sill);
+  // PV rows face south at about 10°, low behind the parapet (gaps between rows in the aerial, nothing visible above the parapet in the photos)
+  const PV_TILT=0.17, PV_D=1.05;
+  [6.5,8.1,9.6,11.2].forEach(z=>{
+    const p=new THREE.Mesh(new THREE.BoxGeometry(6.9,0.05,PV_D),MAT.pv);
+    p.position.set((gx0+gx1)/2,2.93+PV_D/2*Math.sin(PV_TILT),z); p.rotation.x=PV_TILT; G.garage.add(shadow(p));
+    box(G.garage,15.6,22.3,2.84,2.93+PV_D*Math.sin(PV_TILT),z-PV_D/2+0.02,z-PV_D/2+0.08,MAT.alu);
+    box(G.garage,15.6,22.3,2.84,2.92,z+PV_D/2-0.08,z+PV_D/2-0.02,MAT.alu);
+  });
+  // Sectional door 6,9 × 2,4 m with five panels and a wicket door on the left
+  box(G.garage,15.51,22.40,-F,2.27,gz1,gz1+0.05,MAT.door);
+  [0.15,0.64,1.13,1.61,2.10].forEach(y=>box(G.garage,15.51,22.40,y,y+0.025,gz1+0.05,gz1+0.07,MAT.groove));
+  box(G.garage,16.55,16.63,-F,2.27,gz1+0.05,gz1+0.07,MAT.groove);
+  // East: window O.12 with a small side light, ventilation grille; north: ribbon window O.13 and grille
+  box(G.garage,gx1,gx1+0.06,1.38,2.05,7.11,9.39,MAT.frame);
+  box(G.garage,gx1+0.04,gx1+0.07,1.45,1.98,7.16,7.56,MAT.glass);
+  box(G.garage,gx1+0.04,gx1+0.07,1.45,1.98,7.70,9.34,MAT.glass);
+  box(G.garage,gx1,gx1+0.05,0.25,0.36,12.0,12.4,MAT.groove);
+  box(G.garage,15.19,17.18,1.57,2.22,gz0-0.06,gz0,MAT.frame);
+  box(G.garage,15.25,17.12,1.63,2.16,gz0-0.07,gz0-0.04,MAT.glass);
+  box(G.garage,17.55,17.84,2.03,2.18,gz0-0.05,gz0,MAT.groove);
+
+  // ----- Terrace: deck (top = floor 0,000), pool with telescopic cover, pergola roof, furniture -----
+  slab(G.terrace,DECK_EDGE,0,0.1,MAT.edge);
+  slab(G.terrace,DECK,0,F,MAT.deck,[POOL]);
+  flat(G.terrace,POOL,0.02,MAT.water);
+  box(G.terrace,0.4,7.1,0.12,0.17,12.8,12.9,MAT.edge); box(G.terrace,0.4,7.1,0.12,0.17,16.5,16.6,MAT.edge);
+  for(let i=0;i<4;i++){
+    const r=1.98-i*0.06, len=1.7, x=0.45+i*1.6+len/2;
+    const seg=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,28,1,true,Math.PI,Math.PI),MAT.cover);
+    seg.rotation.z=-Math.PI/2; seg.scale.set(0.3,1,1); seg.position.set(x,0.15,14.7); G.terrace.add(seg);
+    [-1,1].forEach(s=>box(G.terrace,x-len/2,x+len/2,0.15,0.2,14.7+s*r-0.04,14.7+s*r+0.04,MAT.alu));
+    const arc=new THREE.Mesh(new THREE.TorusGeometry(r,0.03,6,28,Math.PI),MAT.alu);
+    arc.rotation.y=Math.PI/2; arc.scale.set(1,0.3,1); arc.position.set(x-len/2+0.02,0.15,14.7); G.terrace.add(arc);
+  }
+  // Pergola roof Ž.11: 7,9 × 2,05 m in front of the façade, fascia +2,270 to +2,450, three steel posts
+  box(G.terrace,0.03,7.94,F+SOFFIT,F+2.45,D,10.70,MAT.frame);
+  [0.06,3.96,7.86].forEach(x=>box(G.terrace,x-0.06,x+0.06,F,F+SOFFIT,10.56,10.68,MAT.frame));
+  // Dining set under the pergola
+  box(G.terrace,2.6,4.6,F+0.73,F+0.77,8.85,9.75,MAT.frame);
+  [[2.7,8.9],[4.5,8.9],[2.7,9.7],[4.5,9.7]].forEach(([x,z])=>box(G.terrace,x-0.03,x+0.03,F,F+0.73,z-0.03,z+0.03,MAT.frame));
+  [3.0,3.6,4.2].forEach(x=>[[8.4,8.2],[10.2,10.4]].forEach(([z,bz])=>{
+    box(G.terrace,x-0.22,x+0.22,F+0.43,F+0.47,z-0.22,z+0.22,MAT.groove);
+    box(G.terrace,x-0.22,x+0.22,F+0.47,F+0.9,bz-0.03,bz+0.03,MAT.groove);
+  }));
+  // Pots on the entrance patio
+  [[12.0,15.2],[13.1,16.7],[11.2,16.8],[13.7,14.9]].forEach(([x,z],i)=>{
+    const p=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.24,0.5,16),MAT.pot); p.position.set(x,0.28,z); G.terrace.add(shadow(p));
+    const f=new THREE.Mesh(new THREE.SphereGeometry(0.32,12,10),M(['#5d8a45','#8a64b0','#4f7a3a','#c99a4a'][i]));
+    f.position.set(x,0.68,z); G.terrace.add(shadow(f));
+  });
+
+  // ----- Raised vegetable planters by the north boundary -----
+  PLANTERS.forEach(([a,b])=>{
+    box(G.beds,a,b,0,0.45,-3.8,-2.4,MAT.wood);
+    box(G.beds,a+0.08,b-0.08,0.44,0.47,-3.72,-2.48,M('#4b3a2a'));
+    for(let x=a+0.35;x<b-0.2;x+=0.45){
+      const s=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,6),M('#5f8a45'));
+      s.scale.y=0.7; s.position.set(x,0.58,-3.1); G.beds.add(shadow(s));
+    }
+  });
+
+  // ----- Bed planting as instanced meshes -----
+  const KINDS = {
+    grass: {geo:new THREE.ConeGeometry(1,1.6,9), sy:1.0, cols:['#b09a63','#bca66e','#9f8a57']},
+    green: {geo:new THREE.SphereGeometry(1,10,8), sy:0.85,cols:['#4f7a3a','#3f6a35','#5d8a45','#6b8f4a']},
+    purple:{geo:new THREE.SphereGeometry(1,10,8), sy:0.55,cols:['#8a64b0','#9b76c2','#7a56a0']},
+    burg:  {geo:new THREE.SphereGeometry(1,10,8), sy:1.0, cols:['#5e3330','#6b3d2e','#553038']},
+    rock:  {geo:new THREE.DodecahedronGeometry(1,0), sy:0.5, cols:['#a39e94','#8f8a80','#b5b0a6']}
+  };
+  const dummy=new THREE.Object3D(), col=new THREE.Color();
+  Object.entries(KINDS).forEach(([k,def])=>{
+    const list=PLANTS.filter(p=>p.type===k); if(!list.length) return;
+    const im=new THREE.InstancedMesh(def.geo,M('#ffffff',{roughness:k==='rock'?.8:.95}),list.length);
+    list.forEach((p,i)=>{
+      dummy.position.set(p.x,k==='grass'?p.r*0.8:p.r*def.sy*0.72,p.z); dummy.rotation.set(0,p.rot,0);
+      dummy.scale.set(p.r,p.r*def.sy,p.r); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix);
+      im.setColorAt(i,col.set(def.cols[Math.floor(p.c*def.cols.length)]));
+    });
+    im.castShadow=true; im.receiveShadow=true; G.beds.add(im);
+  });
+
+  // ----- Trees -----
+  function deciduous(x,z,h,r,c){
+    const t=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.11,h*0.6,8),MAT.trunk); t.position.set(x,h*0.3,z); G.trees.add(shadow(t));
+    const k=new THREE.Mesh(new THREE.SphereGeometry(r,16,12),M(c)); k.scale.y=1.15; k.position.set(x,h-r*0.95,z); G.trees.add(shadow(k));
+  }
+  function conifer(x,z,h,r,c,tiers=3){
+    const t=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.12,h*0.3,8),MAT.trunk); t.position.set(x,h*0.15,z); G.trees.add(shadow(t));
+    for(let i=0;i<tiers;i++){const s=1-i*0.25;const k=new THREE.Mesh(new THREE.ConeGeometry(r*s,h*0.5,12),M(c));k.position.set(x,h*0.3+i*h*0.2+h*0.2,z);G.trees.add(shadow(k));}
+  }
+  deciduous(10.3,18.3,3.6,0.9,'#c4703a');   // young tree in front of the terrace, autumn colours in the photos
+  deciduous(12.6,27.0,4.6,1.4,'#5b8540');   // tree in the south bed (newer aerial)
+  conifer(16.4,29.2,3.4,1.1,'#3e6a45');     // weeping conifer by the gate
+  conifer(25.6,11.4,2.2,0.7,'#2f5a3a');     // small spruce on the east lawn
+  deciduous(-4.7,4.5,3.2,1.2,'#4f7a3a');    // large shrubs in the west border
+  deciduous(-4.7,14.0,3.0,1.1,'#5d8a45');
+
+  // ----- Boundary: block wall, wooden slat panels, mesh fence to neighbours -----
+  function blockWall(a,b){
+    const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    along(G.fence,a,b,H.street,H.wallTop,0.3,new THREE.MeshStandardMaterial({map:blockTex(len,H.wallTop-H.street),roughness:.9}));
+    along(G.fence,a,b,H.wallTop,H.wallTop+0.06,0.36,MAT.sill);
+  }
+  function slatWall(a,b){
+    const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    along(G.fence,a,b,H.street,-0.5,0.3,new THREE.MeshStandardMaterial({map:blockTex(len,0.4),roughness:.9}));
+    for(let y=-0.45;y<H.wallTop-0.05;y+=0.15) along(G.fence,a,b,y,y+0.12,0.035,MAT.wood,0.05);
+    const n=Math.max(1,Math.round(len/2));
+    for(let i=0;i<=n;i++){const p=lerp2(a,b,i/n); box(G.fence,p[0]-0.05,p[0]+0.05,-0.5,H.wallTop,p[1]-0.05,p[1]+0.05,MAT.woodDark);}
+  }
+  function meshFence(a,b){
+    const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    along(G.fence,a,b,0,1.5,0.02,MAT.mesh);
+    const n=Math.ceil(len/2.5);
+    for(let i=0;i<=n;i++){const p=lerp2(a,b,i/n); box(G.fence,p[0]-0.04,p[0]+0.04,0,1.55,p[1]-0.04,p[1]+0.04,MAT.post);}
+  }
+  // Each edge: list of [from, to, kind] fractions along the edge
+  const EDGES = [
+    [0,1,[[0,1,'mesh']]],
+    [1,2,[[0,1,'block']]],
+    [2,3,[[0,.5,'block'],[.5,1,'slat']]],
+    [3,4,[[0,.25,'slat'],[.25,1,'block']]],
+    [4,5,[[0,1,'block']]],
+    [5,6,[[0,1,'block']]],
+    [9,10,[[0,.3,'block'],[.3,.62,'slat'],[.62,1,'block']]],
+    [10,11,[[0,1,'block']]],
+    [11,12,[[0,1,'block']]],
+    [12,0,[[0,1,'mesh']]]
+  ];
+  EDGES.forEach(([i,j,parts])=>parts.forEach(([f0,f1,k])=>{
+    const a=lerp2(P[i],P[j],f0), b=lerp2(P[i],P[j],f1);
+    ({block:blockWall,slat:slatWall,mesh:meshFence})[k](a,b);
+  }));
+  // Gate pillars either side of the driveway
+  [[24.9,31.07],[18.4,31.07]].forEach(([x,z])=>box(G.fence,x-0.22,x+0.22,H.street,H.wallTop+0.2,z-0.22,z+0.22,new THREE.MeshStandardMaterial({map:blockTex(0.44,1.8),roughness:.9})));
+  // Electricity meter niche on the side street, white cabinets under a wooden cover
+  {
+    const a=P[1],b=P[2],m=lerp2(a,b,0.5);
+    box(G.fence,m[0]+0.15,m[0]+0.45,H.street+0.3,H.street+1.25,m[1]-1.1,m[1]+1.1,MAT.cabinet);
+    box(G.fence,m[0]+0.12,m[0]+0.55,H.street+1.25,H.street+1.35,m[1]-1.2,m[1]+1.2,MAT.wood);
+  }
+
+  // ----- 1 m grid -----
+  const grid=new THREE.GridHelper(80,80,0x2f3b33,0x2f3b33);
+  grid.position.set(11.6,0.06,13.2); grid.material.transparent=true; grid.material.opacity=0.35; G.grid.add(grid);
+
+  // ----- UI: views and layers -----
+  let goal=null;
+  const viewBtns=[];
+  const viewsEl=document.getElementById('views');
+  VIEWS.forEach((v,idx)=>{
+    const b=document.createElement('button'); b.textContent=v.name; b.setAttribute('aria-pressed',String(idx===0));
+    b.onclick=()=>{goal={pos:new THREE.Vector3(...v.pos),tgt:new THREE.Vector3(...v.tgt)}; viewBtns.forEach(o=>o.setAttribute('aria-pressed',String(o===b)));};
+    viewBtns.push(b); viewsEl.appendChild(b);
+  });
+  controls.addEventListener('start',()=>{goal=null;});
+  const layersEl=document.getElementById('layers');
+  LAYERS.forEach(l=>{
+    const b=document.createElement('button'); b.textContent=l.name; b.setAttribute('aria-pressed',String(!l.off));
+    b.onclick=()=>{G[l.key].visible=!G[l.key].visible; b.setAttribute('aria-pressed',String(G[l.key].visible));};
+    layersEl.appendChild(b);
+  });
+
+  function resize(){
+    const w=stage.clientWidth,h=stage.clientHeight;
+    renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
+  }
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage); else window.addEventListener('resize',resize);
+  resize();
+
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  renderer.setAnimationLoop(()=>{
+    if(goal){
+      const k=reduce?1:0.08;
+      camera.position.lerp(goal.pos,k); controls.target.lerp(goal.tgt,k);
+      if(camera.position.distanceTo(goal.pos)<0.03) goal=null;
+    }
+    controls.update();
+    renderer.render(scene,camera);
+  });
+}
+</script>
+
+</html>
