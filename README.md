@@ -91,6 +91,17 @@ Textury a obloha jsou v `tools/blender/assets/` (nejsou v gitu, stahují se z Po
 
 Zdroje: [macOS požadavky](https://dev.epicgames.com/documentation/unreal-engine/macos-development-requirements-for-unreal-engine), [Linux požadavky](https://dev.epicgames.com/documentation/unreal-engine/linux-development-requirements-for-unreal-engine?lang=en-US), [Linux quickstart](https://dev.epicgames.com/documentation/unreal-engine/linux-development-quickstart-for-unreal-engine).
 
+## Video průlet
+
+`tools/blender/flythrough.py` přidá kameru, která jede z ulice přes zeď k bazénu, podél nového záhonu na západě, kolem rohu domu a po nášlapných deskách za domem (61 m), a vyrenderuje MP4:
+
+```
+ssh dell 'cd ~/Projects/gardenvisu/tools/blender && ~/Applications/blender/blender -b --gpu-backend vulkan --factory-startup \
+  --python build_scene.py --python flythrough.py -- --no-render --engine cycles --samples 16 --res 960x540'
+```
+
+Volby: `--engine eevee|cycles`, `--seconds 24`, `--fps 25`, `--res`, `--samples`, `--frames 1-50`. Eevee na Dellu bez monitoru funguje jen s `--gpu-backend vulkan` (s OpenGL se zasekne) a vychází asi na 23 s na snímek, protože každý snímek znovu synchronizuje celou scénu. Cycles se 16 vzorky v 960×540 dá asi 6 s na snímek, 24s průlet je tak hotový zhruba za hodinu.
+
 ## Procházení modelu (plán)
 
 Rendery z Blenderu jsou statické snímky. Jak model procházet, od nejjednodušší varianty:
