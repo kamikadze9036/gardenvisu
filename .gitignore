@@ -2,3 +2,6 @@ node_modules/
 tools/preview/out/
 .DS_Store
 podklady/
+tools/blender/assets/
+tools/blender/out/
+tools/blender/data/

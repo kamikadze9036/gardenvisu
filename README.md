@@ -16,7 +16,8 @@ Interaktivní 3D model rodinného domu a zahrady pro návrh nové zahrady. Model
 | `podklady/vykresy/` | Projektová dokumentace DPS (PDF, 1 : 50). **Jen lokálně, není v repozitáři** |
 | `podklady/fotky/` | Letecké snímky a fotky z ulice, ze kterých je zahrada. **Jen lokálně, není v repozitáři** |
 | `tools/measure_elevations.py` | Vyměření oken z pohledů (najde šedě vyplněná skla a převede na metry) |
-| `tools/preview/` | Headless náhled modelu, uloží screenshot každého pohledu |
+| `tools/preview/` | Headless náhled modelu, uloží screenshot každého pohledu. `export.mjs` vyexportuje model pro Blender |
+| `tools/blender/build_scene.py` | Sestaví fotorealistickou scénu v Blenderu a vyrenderuje pohledy v Cycles |
 
 Starší verze vznikaly postupně během jednoho rozhovoru. Každá další přidávala podklady, takže je vidět, jak se přesnost zlepšovala.
 
@@ -64,6 +65,21 @@ node preview.mjs ../../index.html out
 
 Screenshoty se uloží do `tools/preview/out/`.
 
+## Fotorealistické rendery (Blender)
+
+Model se z Three.js vyexportuje do glTF a v Blenderu se z něj postaví scéna pro Cycles: PBR materiály a HDRI obloha z [Poly Haven](https://polyhaven.com) (CC0), trávník z instancí stébel, rostliny a stromy generované kódem podle stejných dat jako v prohlížeči. Rendery běží na Dellu (Precision 7530, Quadro P2000, Blender 5.2 LTS v `~/Applications/blender`).
+
+```
+cd tools/preview
+PW_CHANNEL=chrome node export.mjs ../../index.html ../blender/data    # scene.glb + scene.json
+rsync -a ../blender/ dell:Projects/gardenvisu/tools/blender/ --exclude out --exclude assets
+ssh dell 'cd ~/Projects/gardenvisu/tools/blender && ~/Applications/blender/blender -b --factory-startup \
+  --python build_scene.py -- --samples 256 --res 1920x1080 --save out/garden.blend'
+scp 'dell:Projects/gardenvisu/tools/blender/out/view-*.png' ../blender/out/
+```
+
+Volby: `--views bird,street,terrace,top`, `--samples`, `--res 1600x900`, `--cpu`, `--no-render`. Soubor `out/garden.blend` jde otevřít v Blenderu na Dellu a dál upravovat ručně. Textury a obloha jsou v `tools/blender/assets/` (nejsou v gitu, stahují se z Poly Haven API: `assets/<id>/{diff,nor,rough}.jpg`, `assets/hdri/sky.hdr` = kloofendal_48d_partly_cloudy_puresky).
+
 ## Unreal Engine (poznámky)
 
 - MacBook Air M1 s 8 GB na Unreal Engine 5.8 nestačí (minimum 16 GB, doporučeno 32 GB a M3).
@@ -73,7 +89,17 @@ Screenshoty se uloží do `tools/preview/out/`.
 
 Zdroje: [macOS požadavky](https://dev.epicgames.com/documentation/unreal-engine/macos-development-requirements-for-unreal-engine), [Linux požadavky](https://dev.epicgames.com/documentation/unreal-engine/linux-development-requirements-for-unreal-engine?lang=en-US), [Linux quickstart](https://dev.epicgames.com/documentation/unreal-engine/linux-development-quickstart-for-unreal-engine).
 
+## Procházení modelu (plán)
+
+Rendery z Blenderu jsou statické snímky. Jak model procházet, od nejjednodušší varianty:
+
+1. **Walk mód v Blenderu.** `out/garden.blend` přepnout na Eevee a projít ho jako ve hře (`Shift+``, WASD a myš). Funguje hned, jen na Quadro P2000 bude trhanější. Pro procházení je dobré vypnout trávník z instancí (objekt `lawn_points`).
+2. **Video průlet.** Kamera po dráze ulice → zahrada → terasa, render v Cycles do MP4. Fotorealistické, ale ne interaktivní. Render řádově hodiny.
+3. **Procházení v prohlížeči se zapečeným světlem.** Cycles spočítá stíny a odražené světlo do textur (bake) a výsledek se vrátí do webového modelu s ovládáním WASD. Plynulé i na iPadu a mobilu, jde snadno sdílet. Nejlépe sedí k účelu ukazovat návrh zahrady.
+4. **Unreal Engine 5 (do budoucna).** Na Quadro P2000 (4 GB, Pascal) nemá smysl. V záloze je GTX 1070 s 8 GB VRAM, která splňuje doporučených 8 GB. Je to taky Pascal bez RT jader, takže Lumen jen v softwarovém režimu. Je to desktopová karta, takže potřebuje stolní PC, nebo eGPU box přes Thunderbolt 3, pokud ho Dell podporuje (neověřeno). Postup: export `.glb` z Blenderu, import do Unrealu, rozměry v metrech zůstanou.
+
 ## Další kroky
 
 - Zakreslit návrh nové zahrady do modelu (záhony, cesty, stromy) jako samostatnou vrstvu.
+- Procházení podle plánu výše (Walk mód, video, zapečené světlo pro web).
 - Export `.glb` pro Unreal nebo Twinmotion.

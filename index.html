@@ -90,6 +90,16 @@ const HOUSE = [[0,0],[14.9,0],[14.9,8.65],[0,8.65]];
 const GARAGE= [[14.9,4.3],[23.0,4.3],[23.0,12.8],[14.9,12.8]];
 const PLANTERS = [[13.2,15.5],[16.1,20.0]]; // x ranges, z -3.8 .. -2.4
 
+// Trees: position, height, crown radius, colour
+const TREES = [
+  {kind:'deciduous',x:10.3,z:18.3,h:3.6,r:0.9,c:'#c4703a'},   // young tree in front of the terrace, autumn colours in the photos
+  {kind:'deciduous',x:12.6,z:27.0,h:4.6,r:1.4,c:'#5b8540'},   // tree in the south bed (newer aerial)
+  {kind:'conifer',  x:16.4,z:29.2,h:3.4,r:1.1,c:'#3e6a45'},   // weeping conifer by the gate
+  {kind:'conifer',  x:25.6,z:11.4,h:2.2,r:0.7,c:'#2f5a3a'},   // small spruce on the east lawn
+  {kind:'deciduous',x:-4.7,z:4.5, h:3.2,r:1.2,c:'#4f7a3a'},   // large shrubs in the west border
+  {kind:'deciduous',x:-4.7,z:14.0,h:3.0,r:1.1,c:'#5d8a45'}
+];
+
 const H = {eave:4.15, ridge:7.72, garage:2.97, street:-0.9, wallTop:0.7};
 
 const VIEWS = [
@@ -260,10 +270,12 @@ function build(renderer){
     pot:M('#3f4246'), cabinet:M('#ecebe6'), trunk:M('#5e4430')
   };
 
+  Object.entries(MAT).forEach(([k,m])=>{m.name=k;});   // names carry over to the glTF export (tools/blender)
   const G = {};
-  LAYERS.forEach(l=>{G[l.key]=new THREE.Group(); scene.add(G[l.key]);});
+  LAYERS.forEach(l=>{G[l.key]=new THREE.Group(); G[l.key].name=l.key; scene.add(G[l.key]);});
   G.grid.visible=false;
-  const base = new THREE.Group(); scene.add(base);
+  const base = new THREE.Group(); base.name='base'; scene.add(base);
+  window.GARDEN = {scene, G};
 
   const shadow = m => {m.castShadow=true; m.receiveShadow=true; return m;};
   function box(g,x0,x1,y0,y1,z0,z1,mat){
@@ -318,10 +330,10 @@ function build(renderer){
     const uv=[]; for(let i=0;i<pos.length;i+=3) uv.push(pos[i],-pos[i+2]);
     geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
     geo.computeVertexNormals();
-    const ramp=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:T.pave,roughness:.9,side:THREE.DoubleSide}));
+    const ramp=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:T.pave,roughness:.9,side:THREE.DoubleSide,name:'pave'}));
     ramp.receiveShadow=true; G.paving.add(ramp);
     // Low retaining edges either side of the ramp
-    const wm=new THREE.MeshStandardMaterial({map:blockTex(8,1),roughness:.9});
+    const wm=new THREE.MeshStandardMaterial({map:blockTex(8,1),roughness:.9,name:'block'});
     along(G.paving,[18.4,23.2],[18.4,31.07],H.street,0.12,0.2,wm,-0.1);
     along(G.paving,[23.7,23.2],[24.9,31.07],H.street,0.12,0.2,wm,0.1);
   }
@@ -406,7 +418,7 @@ function build(renderer){
   // ----- Garage: 8,1 × 8,5 m, floor −0,150, parapet +2,970, PV rows, sectional door G.01 -----
   const [gx0,gx1,gz0,gz1]=[14.9,23.0,4.30,12.80];
   box(G.garage,gx0,gx1,-F,2.8,gz0,gz1,MAT.wall);
-  box(G.garage,gx0+0.25,gx1-0.25,2.78,2.84,gz0+0.25,gz1-0.25,M('#4a4d50'));
+  box(G.garage,gx0+0.25,gx1-0.25,2.78,2.84,gz0+0.25,gz1-0.25,M('#4a4d50',{name:'membrane'}));
   [[gx0,gx1,gz0,gz0+0.25],[gx0,gx1,gz1-0.25,gz1],[gx0,gx0+0.25,gz0,gz1],[gx1-0.25,gx1,gz0,gz1]].forEach(([a,b,c,d])=>box(G.garage,a,b,2.8,H.garage,c,d,MAT.wall));
   box(G.garage,gx0-0.02,gx1+0.02,H.garage-0.04,H.garage+0.01,gz0-0.02,gz1+0.02,MAT.sill);
   // PV rows face south at about 10°, low behind the parapet (gaps between rows in the aerial, nothing visible above the parapet in the photos)
@@ -456,16 +468,16 @@ function build(renderer){
   // Pots on the entrance patio
   [[12.0,15.2],[13.1,16.7],[11.2,16.8],[13.7,14.9]].forEach(([x,z],i)=>{
     const p=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.24,0.5,16),MAT.pot); p.position.set(x,0.28,z); G.terrace.add(shadow(p));
-    const f=new THREE.Mesh(new THREE.SphereGeometry(0.32,12,10),M(['#5d8a45','#8a64b0','#4f7a3a','#c99a4a'][i]));
+    const f=new THREE.Mesh(new THREE.SphereGeometry(0.32,12,10),M(['#5d8a45','#8a64b0','#4f7a3a','#c99a4a'][i],{name:'potplant'}));
     f.position.set(x,0.68,z); G.terrace.add(shadow(f));
   });
 
   // ----- Raised vegetable planters by the north boundary -----
   PLANTERS.forEach(([a,b])=>{
     box(G.beds,a,b,0,0.45,-3.8,-2.4,MAT.wood);
-    box(G.beds,a+0.08,b-0.08,0.44,0.47,-3.72,-2.48,M('#4b3a2a'));
+    box(G.beds,a+0.08,b-0.08,0.44,0.47,-3.72,-2.48,M('#4b3a2a',{name:'soil'}));
     for(let x=a+0.35;x<b-0.2;x+=0.45){
-      const s=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,6),M('#5f8a45'));
+      const s=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,6),M('#5f8a45',{name:'veg'}));
       s.scale.y=0.7; s.position.set(x,0.58,-3.1); G.beds.add(shadow(s));
     }
   });
@@ -499,22 +511,17 @@ function build(renderer){
     const t=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.12,h*0.3,8),MAT.trunk); t.position.set(x,h*0.15,z); G.trees.add(shadow(t));
     for(let i=0;i<tiers;i++){const s=1-i*0.25;const k=new THREE.Mesh(new THREE.ConeGeometry(r*s,h*0.5,12),M(c));k.position.set(x,h*0.3+i*h*0.2+h*0.2,z);G.trees.add(shadow(k));}
   }
-  deciduous(10.3,18.3,3.6,0.9,'#c4703a');   // young tree in front of the terrace, autumn colours in the photos
-  deciduous(12.6,27.0,4.6,1.4,'#5b8540');   // tree in the south bed (newer aerial)
-  conifer(16.4,29.2,3.4,1.1,'#3e6a45');     // weeping conifer by the gate
-  conifer(25.6,11.4,2.2,0.7,'#2f5a3a');     // small spruce on the east lawn
-  deciduous(-4.7,4.5,3.2,1.2,'#4f7a3a');    // large shrubs in the west border
-  deciduous(-4.7,14.0,3.0,1.1,'#5d8a45');
+  TREES.forEach(t=>(t.kind==='conifer'?conifer:deciduous)(t.x,t.z,t.h,t.r,t.c));
 
   // ----- Boundary: block wall, wooden slat panels, mesh fence to neighbours -----
   function blockWall(a,b){
     const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
-    along(G.fence,a,b,H.street,H.wallTop,0.3,new THREE.MeshStandardMaterial({map:blockTex(len,H.wallTop-H.street),roughness:.9}));
+    along(G.fence,a,b,H.street,H.wallTop,0.3,new THREE.MeshStandardMaterial({map:blockTex(len,H.wallTop-H.street),roughness:.9,name:'block'}));
     along(G.fence,a,b,H.wallTop,H.wallTop+0.06,0.36,MAT.sill);
   }
   function slatWall(a,b){
     const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
-    along(G.fence,a,b,H.street,-0.5,0.3,new THREE.MeshStandardMaterial({map:blockTex(len,0.4),roughness:.9}));
+    along(G.fence,a,b,H.street,-0.5,0.3,new THREE.MeshStandardMaterial({map:blockTex(len,0.4),roughness:.9,name:'block'}));
     for(let y=-0.45;y<H.wallTop-0.05;y+=0.15) along(G.fence,a,b,y,y+0.12,0.035,MAT.wood,0.05);
     const n=Math.max(1,Math.round(len/2));
     for(let i=0;i<=n;i++){const p=lerp2(a,b,i/n); box(G.fence,p[0]-0.05,p[0]+0.05,-0.5,H.wallTop,p[1]-0.05,p[1]+0.05,MAT.woodDark);}
@@ -543,7 +550,7 @@ function build(renderer){
     ({block:blockWall,slat:slatWall,mesh:meshFence})[k](a,b);
   }));
   // Gate pillars either side of the driveway
-  [[24.9,31.07],[18.4,31.07]].forEach(([x,z])=>box(G.fence,x-0.22,x+0.22,H.street,H.wallTop+0.2,z-0.22,z+0.22,new THREE.MeshStandardMaterial({map:blockTex(0.44,1.8),roughness:.9})));
+  [[24.9,31.07],[18.4,31.07]].forEach(([x,z])=>box(G.fence,x-0.22,x+0.22,H.street,H.wallTop+0.2,z-0.22,z+0.22,new THREE.MeshStandardMaterial({map:blockTex(0.44,1.8),roughness:.9,name:'block'})));
   // Electricity meter niche on the side street, white cabinets under a wooden cover
   {
     const a=P[1],b=P[2],m=lerp2(a,b,0.5);
