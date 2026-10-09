@@ -18,6 +18,10 @@ Interaktivní 3D model rodinného domu a zahrady pro návrh nové zahrady. Model
 | `tools/measure_elevations.py` | Vyměření oken z pohledů (najde šedě vyplněná skla a převede na metry) |
 | `tools/preview/` | Headless náhled modelu, uloží screenshot každého pohledu. `export.mjs` vyexportuje model pro Blender |
 | `tools/blender/build_scene.py` | Sestaví fotorealistickou scénu v Blenderu a vyrenderuje pohledy v Cycles |
+| `tools/blender/flythrough.py` | Video průlet zahradou (MP4), spouští se po `build_scene.py` |
+| `tools/blender/fetch_assets.py` | Stáhne textury, oblohu a modely z Poly Haven do `tools/blender/assets/` |
+| `podklady/navrh/` | Osazovací plán, inspirační fotky (cesta za domem, zastřešení bazénu). **Jen lokálně** |
+| `podklady/fotky/realita/` | Fotky skutečného stavu 01–22 a jejich popis `POPIS.md`. **Jen lokálně** |
 
 Starší verze vznikaly postupně během jednoho rozhovoru. Každá další přidávala podklady, takže je vidět, jak se přesnost zlepšovala.
 
@@ -41,7 +45,7 @@ Starší verze vznikaly postupně během jednoho rozhovoru. Každá další při
 | Plot a zeď | tvárnice + pole z lamel, cca 1,6 m od chodníku | fotky z ulice, výška odhadem |
 | Fotovoltaika | 4 řady na jih, cca 10°, schované za atikou | letecký snímek + fotky |
 
-Druhy a rozmístění rostlin v záhonech jsou orientační (generované).
+Druhy a rozmístění rostlin ve stávajících záhonech jsou orientační (generované podle fotek). Návrh je popsaný níže.
 
 Výkresy a fotky obsahují osobní údaje a výkresy jsou autorským dílem architekta, proto jsou ve složce `podklady/`, kterou git ignoruje.
 
@@ -73,14 +77,25 @@ Model se z Three.js vyexportuje do glTF a v Blenderu se z něj postaví scéna p
 cd tools/preview
 PW_CHANNEL=chrome node export.mjs ../../index.html ../blender/data    # scene.glb + scene.json
 rsync -a ../blender/ dell:Projects/gardenvisu/tools/blender/ --exclude out --exclude assets
-ssh dell 'cd ~/Projects/gardenvisu/tools/blender && ~/Applications/blender/blender -b --factory-startup \
-  --python build_scene.py -- --samples 256 --res 1920x1080 --save out/garden.blend'
+ssh dell 'cd ~/Projects/gardenvisu/tools/blender && python3 fetch_assets.py'           # jen poprvé
+ssh dell 'cd ~/Projects/gardenvisu/tools/blender && nohup ~/Applications/blender/blender -b --factory-startup \
+  --python build_scene.py -- --samples 256 --res 1920x1080 --save out/garden.blend > out/render.log 2>&1 &'
 scp 'dell:Projects/gardenvisu/tools/blender/out/view-*.png' ../blender/out/
 ```
 
-Volby: `--views bird,street,terrace,top,west-bed,north-path,yard,pool`, `--samples`, `--res 1600x900`, `--cpu`, `--no-render`. Soubor `out/garden.blend` jde otevřít v Blenderu na Dellu a dál upravovat ručně. Co scéna obsahuje navíc proti webu: zastřešení bazénu podle fotky (4 nízké teleskopické segmenty), šedou WPC terasu s hnědým okrajem, zeď z tmavých tvárnic (procedurálně), ulici s asfaltem, chodníky a obrubníky, domy naproti a řadu stromů na obzoru, 10 druhů trvalek z osazovacího plánu a jahody ve vyvýšených záhonech. Kromě 4 pohledů z webu jsou v Blenderu ještě 3 pohledy z výšky očí na návrh (`west-bed`, `north-path`, `pool`).
+Volby: `--views bird,street,terrace,top,west-bed,north-path,yard,pool`, `--samples`, `--res 1600x900`, `--cpu`, `--no-render`. Soubor `out/garden.blend` jde otevřít v Blenderu na Dellu a dál upravovat ručně. Render přes `nohup`, aby ho nepřerušilo spadlé SSH spojení. Celých 8 pohledů ve Full HD se 256 vzorky trvá asi 20 minut.
 
-Textury a obloha jsou v `tools/blender/assets/` (nejsou v gitu, stahují se z Poly Haven API: `assets/<id>/{diff,nor,rough}.jpg`, `assets/hdri/sky.hdr` = kloofendal_48d_partly_cloudy_puresky). Další textury: asphalt_02, concrete_pavement, concrete_floor_02, clean_pebbles, weathered_planks. Modely v `assets/models/<id>/`: tree_small_02 (listnaté stromy, podzimní varianta přebarvením), boulder_01 a rock_07. Keře shrub_01–04 z Poly Haven jsou řídké africké keříky, do zahrady se nehodí, proto jsou keře a trvalky generované kódem.
+Co scéna obsahuje navíc proti webu (všechno podle fotek v `podklady/fotky/realita/`):
+- zastřešení bazénu Mountfield na míru: 3 nízké segmenty, mírně šikmé boky, plochý oblouk, mléčný žebrovaný polykarbonát, antracitové profily, stříbrné kolejnice po celé terase (fotky 21, 22),
+- bioklimatickou pergolu bez prosklení s lamelovou střechou, hnědou WPC terasu a taškovou střechu domu,
+- zeď z tmavých tvárnic, plot z tvárnic a latí na pozinkovaných sloupcích na východě, pletivo na severu a západě, ulici a chodníky ze zámkové dlažby,
+- keře podle druhů z fotek (tavolník, vrba Hakuro Nishiki, bobkovišeň, ruj, muchovník, brslen, růže), stromy z fotek, oblázkový záhon u vstupu,
+- dvorek za garáží s domkem, dřevníkem, ohništěm a posezením, jahody ve vyvýšených záhonech,
+- okolní domy a řadu stromů na obzoru (přibližně).
+
+Pohledy: 4 z webu (`bird`, `street`, `terrace`, `top`) a 4 z výšky očí (`west-bed`, `north-path`, `yard`, `pool`).
+
+Textury, obloha a modely jsou v `tools/blender/assets/`. Nejsou v gitu a stáhne je `fetch_assets.py` (seznam je v něm). Obloha je HDRI kloofendal_48d_partly_cloudy_puresky, natočená tak, aby slunce svítilo od jihozápadu jako ve webu. Modely v `assets/models/<id>/`: tree_small_02 (listnaté stromy, podzimní varianta přebarvením), boulder_01 a rock_07. Keře shrub_01–04 z Poly Haven jsou řídké africké keříky, do zahrady se nehodí, proto jsou keře a trvalky generované kódem.
 
 ## Unreal Engine (poznámky)
 
@@ -93,14 +108,15 @@ Zdroje: [macOS požadavky](https://dev.epicgames.com/documentation/unreal-engine
 
 ## Video průlet
 
-`tools/blender/flythrough.py` přidá kameru, která jede z ulice přes zeď k bazénu, podél nového záhonu na západě, kolem rohu domu a po nášlapných deskách za domem (61 m), a vyrenderuje MP4:
+`tools/blender/flythrough.py` přidá kameru, která jede z ulice přes zeď k bazénu, podél nového záhonu na západě, kolem rohu domu, po nášlapných deskách za domem a na dvorek k ohništi, a vyrenderuje MP4 do `out/flythrough-cycles-*.mp4`:
 
 ```
-ssh dell 'cd ~/Projects/gardenvisu/tools/blender && ~/Applications/blender/blender -b --gpu-backend vulkan --factory-startup \
-  --python build_scene.py --python flythrough.py -- --no-render --engine cycles --samples 16 --res 960x540'
+ssh dell 'cd ~/Projects/gardenvisu/tools/blender && nohup ~/Applications/blender/blender -b --factory-startup \
+  --python build_scene.py --python flythrough.py -- --no-render --engine cycles --samples 16 --res 960x540 --seconds 28 \
+  > out/fly.log 2>&1 &'
 ```
 
-Volby: `--engine eevee|cycles`, `--seconds 24`, `--fps 25`, `--res`, `--samples`, `--frames 1-50`. Eevee na Dellu bez monitoru funguje jen s `--gpu-backend vulkan` (s OpenGL se zasekne) a vychází asi na 23 s na snímek, protože každý snímek znovu synchronizuje celou scénu. Cycles se 16 vzorky v 960×540 dá asi 6 s na snímek, 24s průlet je tak hotový zhruba za hodinu.
+Volby: `--engine eevee|cycles`, `--seconds 24`, `--fps 25`, `--res`, `--samples`, `--frames 1-50`. Eevee na Dellu bez monitoru funguje jen s `--gpu-backend vulkan` (s OpenGL se zasekne) a vychází asi na 23 s na snímek, protože každý snímek znovu synchronizuje celou scénu. Cycles se 16 vzorky v 960×540 dá asi 10 s na snímek, 28s průlet (700 snímků) je hotový zhruba za 2 hodiny. Finální verze 1280×720 se 64 vzorky by trvala zhruba 6–8 hodin. Trasa se mění v poli `ROUTE` ve `flythrough.py`.
 
 ## Procházení modelu (plán)
 
@@ -113,15 +129,40 @@ Rendery z Blenderu jsou statické snímky. Jak model procházet, od nejjednoduš
 
 ## Návrh zahrady
 
-Vrstva **Návrh** ve webu a stejná data v Blenderu (konstanty `SPECIES`, `PLAN_BEDS`, `NORTH_BED`, `GRAVEL`, `PATH` v `index.html`):
+Vrstva **Návrh** ve webu a stejná data v Blenderu (konstanty `SPECIES`, `PLAN_BEDS`, `NORTH_BED`, `NE_YARD`, `FIRE`, `GRAVEL`, `PATH`, `FURNITURE`, `EXISTING` v `index.html`):
 
-- **Rozšíření záhonu podle osazovacího plánu** (`podklady/navrh/`, jen lokálně): 2 záhony 12 a 6 m × 1 m, dvě řady po 0,5 m, 10 druhů trvalek. **Poloha je odhad:** před keři u západního plotu, 12m záhon od rohu domu na jih, 6m hned za ním, první rostlina řady je na severním konci. Posun = změnit `x0`, `z0` v `PLAN_BEDS`.
-- **Za domem a za garáží** (fotky 10–20 v `podklady/fotky/realita/`, popis v `POPIS.md` tamtéž): kde je teď hlína, nebude trávník. Návrh: trvalky z osazovacího plánu v mulči, nášlapné betonové desky 1,0 × 0,4 m podél domu a za roh až k oblázkovému kruhu s korten ohništěm. Stávající věci zůstávají: vyvýšené záhony s jahodami, dětský domek, dřevník, posezení u garáže, pás dochanů a hortenzií, oblázkové pruhy u zdí.
+- **Rozšíření záhonu podle osazovacího plánu** (`podklady/navrh/`, jen lokálně): rovný pás 18 m × 1 m před keři u západního plotu, dvě řady po 0,5 m, 10 druhů trvalek. Začíná na severu, kde už jsou trvalky zasazené, a pokračuje na jih k bazénu: nejdřív 12m záhon, pak 6m. Širší kus hlíny u terasy bude zase trávník. Posun = změnit `x0`, `z0` v `PLAN_BEDS`.
+- **Za domem a za garáží** (fotky 10–20 v `podklady/fotky/realita/`, popis v `POPIS.md` tamtéž): kde je teď hlína, nebude trávník. Návrh (zatím podle Claude, ne podle plánu): trvalky z osazovacího plánu v mulči, nášlapné betonové desky 1,0 × 0,4 m podél domu a za roh až k oblázkovému kruhu s korten ohništěm. Vzdálenost severní zdi od hranice je 2,71 + 2,00 m podle situace C.2. Domek má 1,2 × 1,2 m, stěny 1,2 m + střechu a stojí 1 m od plotu. Stávající věci zůstávají: vyvýšené záhony s jahodami, dětský domek, dřevník, posezení u garáže, pás dochanů a hortenzií, oblázkové pruhy u zdí.
 
-Model je doladěný podle fotek skutečnosti: taškovou střechou, hnědou WPC terasou, antracitovými profily zastřešení bazénu, dlážděnou ulicí, plotem z tvárnic a latí na východě, pletivem na severu a západě, hustšími záhony, stromy v západním záhonu a západním sousedem. Kamera `yard` ukazuje dvorek za garáží.
+
 
 ## Další kroky
 
-- Zakreslit návrh nové zahrady do modelu (záhony, cesty, stromy) jako samostatnou vrstvu.
-- Procházení podle plánu výše (Walk mód, video, zapečené světlo pro web).
+- Upřesnit návrh za domem a na dvorku podle skutečného plánu.
+- Finální video ve vyšší kvalitě, procházení podle plánu výše (Walk mód, zapečené světlo pro web).
 - Export `.glb` pro Unreal nebo Twinmotion.
+
+## Pro jinou AI (ChatGPT, Claude…) nebo nového člověka
+
+**Jak vzniklo:** celé v Claude Code s modelem Claude Opus 5.5 (říjen 2026), rutinní kroky (stahování textur) dělal subagent Claude Haiku 5.5. Historie změn je v `git log`.
+
+**Prostředí:**
+
+| Co | Verze / kde |
+|---|---|
+| Web | three.js r128 + OrbitControls z CDN, jeden soubor `index.html` |
+| Náhled a export | Node.js, Playwright 1.47.2, three 0.128.0 (`tools/preview/package.json`). Na macOS 27 bundled Chromium nejede, proto `PW_CHANNEL=chrome` |
+| Rendery | Blender 5.2.2 LTS, Cycles s OptiX, Python skripty v `tools/blender/` |
+| Stroj na rendery | Dell Precision 7530 (`ssh dell`, Ubuntu 26.04, i7-8750H, 37 GB RAM, Quadro P2000 4 GB), kopie projektu v `~/Projects/gardenvisu` přes rsync |
+| Assety | Poly Haven (CC0), `tools/blender/fetch_assets.py` |
+
+**Tok dat:** `index.html` je jediný zdroj pravdy pro rozměry a polohy (dům z výkresů, zahrada ze snímku a fotek, návrh). `tools/preview/export.mjs` z něj udělá `tools/blender/data/scene.glb` (stavby, plochy) a `scene.json` (rostliny, stromy, kamery, polygony, návrh). `build_scene.py` z toho postaví scénu v Blenderu: přiřadí PBR materiály podle jmen materiálů z webu, vygeneruje rostliny, trávník, stromy, zastřešení bazénu, pergolu, okolí a vyrenderuje pohledy.
+
+**Kde co změnit:**
+- rozměry, polohy, rostliny v návrhu, kamery → `index.html`, pak znovu export,
+- vzhled (materiály, tvary rostlin, zastřešení, pergola, okolní domy, světlo) → `tools/blender/build_scene.py`, sekce jsou oddělené komentáři `# ----`,
+- trasa videa → `ROUTE` ve `tools/blender/flythrough.py`.
+
+**Co jiná AI nebude mít:** složku `podklady/` (výkresy, letecké snímky, fotky skutečnosti a jejich popis `podklady/fotky/realita/POPIS.md`, osazovací plán). Je jen lokálně, protože obsahuje osobní údaje a autorské výkresy. Kdo bude pokračovat, potřebuje ji dostat zvlášť.
+
+**Souřadnice:** web má počátek v SZ rohu domu, x na východ, z na jih k ulici, y nahoru, vše v metrech. V Blenderu je x na východ, y na sever (= −z z webu), z nahoru.
