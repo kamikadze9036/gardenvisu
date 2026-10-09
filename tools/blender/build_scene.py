@@ -23,7 +23,7 @@ def arg(name, default=None):
     return argv[argv.index(name) + 1] if name in argv else default
 # The web's terrace camera stands inside the pergola; here it moves just in front of the glass walls
 for v in D['VIEWS']:
-    if v['key'] == 'terrace': v['pos'] = [2.2, 1.75, 11.7]
+    if v['key'] == 'terrace': v['pos'] = [8.8, 1.7, 11.0]; v['tgt'] = [9.5, 0.6, 26.0]   # east of the pool, looking at the street border
 # Extra eye-level views of the design (Three.js coordinates, like D['VIEWS'])
 D['VIEWS'] += [
     {'key': 'west-bed',   'pos': [-1.2, 1.65, 19.0], 'tgt': [-3.6, 0.5, 4.0]},     # along the new bed by the west fence
@@ -551,13 +551,14 @@ SHRUBS = {   # name: colour, leaf size factor, leaf count, roughness
     'spiraea_orange': ('#d08a2c', 0.4, 9000, 0.7), 'spiraea_yellow': ('#b7a33a', 0.4, 9000, 0.7),
     'hakuro':         ('#b9c7a6', 0.45, 8500, 0.7), 'laurel':         ('#2c5225', 1.0, 3600, 0.35),
     'green':          ('#4f7a3a', 0.6, 6000, 0.7), 'cotinus':        ('#4b2633', 0.6, 6000, 0.6),
-    'amelanchier':    ('#b5402f', 0.5, 7000, 0.7),
+    'amelanchier':    ('#b5402f', 0.5, 7000, 0.7), 'euonymus':       ('#c0262c', 0.45, 8000, 0.65),
+    'rose':           ('#3f6a30', 0.45, 6500, 0.6),
 }
 SHRUB_P = {k: proto_shrub(20 + i, leaf_mat(f'leaf_{k}', c, rough=r_), 0.85 if k not in ('cotinus', 'amelanchier') else 1.0, n=n, leaf=lf)
            for i, (k, (c, lf, n, r_)) in enumerate(SHRUBS.items())}
 PROTOS = {
-    'green':  [SHRUB_P[k] for k in ('spiraea_orange', 'hakuro', 'laurel', 'green', 'spiraea_yellow', 'green')],
-    'burg':   [SHRUB_P[k] for k in ('cotinus', 'amelanchier')],
+    'green':  [SHRUB_P[k] for k in ('green', 'laurel', 'hakuro', 'green', 'rose', 'spiraea_orange', 'green', 'spiraea_yellow', 'laurel', 'rose')],
+    'burg':   [SHRUB_P[k] for k in ('cotinus', 'amelanchier', 'euonymus', 'euonymus')],
     'purple': [proto_aster(s) for s in (6, 7, 8)],
     'grass':  [proto_grass_clump(s) for s in (9, 10, 11)],
     'rock':   [proto_rock(s) for s in (12, 13, 14)],
