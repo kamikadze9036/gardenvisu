@@ -131,7 +131,9 @@ const FIRE      = {x:20.6, z:1.55, r:1.45};
 const GRAVEL = [
   [[0,-0.4],[14.9,-0.4],[14.9,0],[0,0]],
   [[14.9,0],[15.25,0],[15.25,4.3],[14.9,4.3]],
-  [[15.25,3.95],[23.0,3.95],[23.0,4.3],[15.25,4.3]]
+  [[15.25,3.95],[23.0,3.95],[23.0,4.3],[15.25,4.3]],
+  // pebble bed between the entrance paving and the deck: hydrangeas, boulders, dwarf pine, grass (photos 01, 02)
+  [[10.6,13.8],[12.5,14.0],[13.2,15.9],[12.0,17.6],[10.6,17.4]]
 ];
 // Stepping stones 1,0 × 0,4 m every 0,6 m along a polyline: behind the house, round the corner to the fire area
 const PATH = {pts:[[-2.3,-1.85],[14.3,-1.85],[15.5,-0.3],[16.6,0.5],[19.2,1.1]], along:0.4, across:1.0, gap:0.2};
@@ -152,7 +154,9 @@ const FURNITURE = [
   {type:'firebowl',  x:FIRE.x, z:FIRE.z, r:0.4},
   {type:'chair',     x:16.6, z:3.45, rot:Math.PI*0.95},
   {type:'chair',     x:17.9, z:3.45, rot:Math.PI*1.08},
-  {type:'table',     x:17.25, z:3.6, r:0.28}
+  {type:'table',     x:17.25, z:3.6, r:0.28},
+  {type:'boulder',   x:11.0, z:16.4, r:0.45}, {type:'boulder', x:12.3, z:14.6, r:0.3}, {type:'boulder', x:11.9, z:16.9, r:0.25},
+  {type:'stump',     x:12.2, z:16.1, r:0.32}     // tree-stump planter with a round top
 ];
 const DESIGN_BEDS = [NORTH_BED, NE_YARD, ...PLAN_BEDS.map(b=>[[b.x0,b.z0],[b.x0+1,b.z0],[b.x0+1,b.z0+b.len],[b.x0,b.z0+b.len]])];
 
@@ -168,7 +172,8 @@ const TREES = [
   {kind:'conifer',  x:-4.2,z:7.4, h:2.6,r:0.55,c:'#8aa3ad'},  // two blue cedars on stakes
   {kind:'conifer',  x:-4.5,z:8.5, h:2.8,r:0.6, c:'#8aa3ad'},
   {kind:'deciduous',x:3.2, z:-4.0,h:3.0,r:1.0,c:'#5a2d3a'},   // purple-leaved tree by the north fence (photo 14)
-  {kind:'deciduous',x:-1.6,z:-3.9,h:2.4,r:0.8,c:'#8a9a40'}    // weeping tree on stakes in the north-west corner (photo 16)
+  {kind:'deciduous',x:-1.6,z:-3.9,h:2.4,r:0.8,c:'#8a9a40'},   // weeping tree on stakes in the north-west corner (photo 16)
+  {kind:'conifer',  x:11.8,z:15.9,h:0.8,r:0.4,c:'#4f6b35'}    // dwarf pine in the pebble bed (photo 02)
 ];
 
 const H = {eave:4.15, ridge:7.72, garage:2.97, street:-0.9, wallTop:0.7};
@@ -247,7 +252,8 @@ PLAN_BEDS.forEach(b=>[['back',0.25,0],['front',0.75,0.25]].forEach(([row,dx,dz])
 }));
 const EXISTING = [   // strip of fountain grass and hydrangeas (photos 10–12), the bed by the garage wall
   ...[16.7,17.4,18.1,18.8,19.5,20.2,20.9,21.5].map((x,i)=>({sp:i%3===2?11:12, x, z:-0.95+(i%2)*0.25})),
-  {sp:13,x:15.6,z:3.65},{sp:11,x:16.0,z:2.9},{sp:11,x:19.0,z:3.55},{sp:11,x:20.1,z:3.6},{sp:13,x:21.4,z:3.6},{sp:12,x:22.3,z:3.2}
+  {sp:13,x:15.6,z:3.65},{sp:11,x:16.0,z:2.9},{sp:11,x:19.0,z:3.55},{sp:11,x:20.1,z:3.6},{sp:13,x:21.4,z:3.6},{sp:12,x:22.3,z:3.2},
+  {sp:11,x:11.3,z:15.2},{sp:11,x:12.4,z:15.6},{sp:13,x:11.6,z:14.4}     // pebble bed by the entrance
 ];
 EXISTING.forEach(p=>DESIGN_PLANTS.push({...p, rot:rand()*Math.PI*2, existing:true}));
 const FREE = (x,z) => !nearPath(x,z,PATH.across/2+0.15) && Math.hypot(x-FIRE.x,z-FIRE.z)>FIRE.r+0.2
@@ -615,6 +621,8 @@ function build(renderer){
     if(f.type==='woodshed'){ box(G.design,f.x-f.w/2,f.x+f.w/2,0,f.h-0.1,f.z-f.d/2,f.z+f.d/2,M('#b98a5e')); box(G.design,f.x-f.w/2-0.05,f.x+f.w/2+0.1,f.h-0.1,f.h,f.z-f.d/2-0.05,f.z+f.d/2+0.05,M('#4b4f54')); }
     if(f.type==='firebowl'){ const b=new THREE.Mesh(new THREE.CylinderGeometry(f.r,f.r*0.5,0.3,24),M('#8a4a24')); b.position.set(f.x,0.3,f.z); G.design.add(shadow(b)); }
     if(f.type==='chair'){ box(G.design,f.x-0.3,f.x+0.3,0.35,0.42,f.z-0.3,f.z+0.3,M('#2a2c2e')); }
+    if(f.type==='boulder'){ const b=new THREE.Mesh(new THREE.DodecahedronGeometry(f.r,0),M('#c9b68e')); b.scale.y=0.6; b.position.set(f.x,f.r*0.4,f.z); G.design.add(shadow(b)); }
+    if(f.type==='stump'){ const b=new THREE.Mesh(new THREE.CylinderGeometry(f.r,f.r*1.05,0.35,20),M('#6b4a32')); b.position.set(f.x,0.18,f.z); G.design.add(shadow(b)); }
     if(f.type==='table'){ const t=new THREE.Mesh(new THREE.CylinderGeometry(f.r,f.r,0.45,20),M('#2a2c2e')); t.position.set(f.x,0.23,f.z); G.design.add(shadow(t)); }
   });
   {

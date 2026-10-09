@@ -21,6 +21,9 @@ D = json.load(open(os.path.join(HERE, 'data', 'scene.json')))
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 def arg(name, default=None):
     return argv[argv.index(name) + 1] if name in argv else default
+# The web's terrace camera stands inside the pergola; here it moves just in front of the glass walls
+for v in D['VIEWS']:
+    if v['key'] == 'terrace': v['pos'] = [2.2, 1.75, 11.7]
 # Extra eye-level views of the design (Three.js coordinates, like D['VIEWS'])
 D['VIEWS'] += [
     {'key': 'west-bed',   'pos': [-1.2, 1.65, 19.0], 'tgt': [-3.6, 0.5, 4.0]},     # along the new bed by the west fence
@@ -148,7 +151,7 @@ def standing_seam(name, col):
     link(nt, m2.outputs[0], bp.inputs['Height']); link(nt, bp.outputs['Normal'], bsdf.inputs['Normal'])
     return m
 
-def leaf_mat(name, col, hue_var=0.04, val_var=0.25, transl=0.35, gradient=None):
+def leaf_mat(name, col, hue_var=0.04, val_var=0.25, transl=0.35, gradient=None, rough=0.7):
     """Two-sided foliage: Principled mixed with a translucent lobe, per-object colour variation.
     gradient=(col_bottom, col_top, height) blends the colour along the object's local Z instead."""
     m, nt, bsdf = new_mat(name)
@@ -172,7 +175,7 @@ def leaf_mat(name, col, hue_var=0.04, val_var=0.25, transl=0.35, gradient=None):
     link(nt, oi.outputs['Random'], mh.inputs['Value']); link(nt, oi.outputs['Random'], mv.inputs['Value'])
     link(nt, mh.outputs['Result'], hs.inputs['Hue']); link(nt, mv.outputs['Result'], hs.inputs['Value'])
     link(nt, hs.outputs['Color'], bsdf.inputs['Base Color'])
-    bsdf.inputs['Roughness'].default_value = 0.7; bsdf.inputs['Specular IOR Level'].default_value = 0.3
+    bsdf.inputs['Roughness'].default_value = rough; bsdf.inputs['Specular IOR Level'].default_value = 0.3
     tr = nt.nodes.new('ShaderNodeBsdfTranslucent'); link(nt, hs.outputs['Color'], tr.inputs['Color'])
     mix = nt.nodes.new('ShaderNodeMixShader'); mix.inputs['Fac'].default_value = transl
     link(nt, bsdf.outputs[0], mix.inputs[1]); link(nt, tr.outputs[0], mix.inputs[2])
@@ -542,9 +545,19 @@ def instance(model, x, y, z=0.0, height=None, radius=None, rot=0.0):
 TREE_M = load_model('tree_small_02')
 ROCKS_M = [m for m in (load_model('boulder_01'), load_model('rock_07')) if m]
 
+# Shrubs after what grows in the borders (photos 03–05, 15–20): spiraea in autumn colours, variegated willow
+# 'Hakuro Nishiki', cherry laurel, purple smoke bush, red serviceberry and plain green shrubs. Leaves at their real size.
+SHRUBS = {   # name: colour, leaf size factor, leaf count, roughness
+    'spiraea_orange': ('#d08a2c', 0.4, 9000, 0.7), 'spiraea_yellow': ('#b7a33a', 0.4, 9000, 0.7),
+    'hakuro':         ('#b9c7a6', 0.45, 8500, 0.7), 'laurel':         ('#2c5225', 1.0, 3600, 0.35),
+    'green':          ('#4f7a3a', 0.6, 6000, 0.7), 'cotinus':        ('#4b2633', 0.6, 6000, 0.6),
+    'amelanchier':    ('#b5402f', 0.5, 7000, 0.7),
+}
+SHRUB_P = {k: proto_shrub(20 + i, leaf_mat(f'leaf_{k}', c, rough=r_), 0.85 if k not in ('cotinus', 'amelanchier') else 1.0, n=n, leaf=lf)
+           for i, (k, (c, lf, n, r_)) in enumerate(SHRUBS.items())}
 PROTOS = {
-    'green':  [proto_shrub(s, LEAF['green'], 0.85) for s in (1, 2, 3)],
-    'burg':   [proto_shrub(s, LEAF['burg'], 1.0) for s in (4, 5)],
+    'green':  [SHRUB_P[k] for k in ('spiraea_orange', 'hakuro', 'laurel', 'green', 'spiraea_yellow', 'green')],
+    'burg':   [SHRUB_P[k] for k in ('cotinus', 'amelanchier')],
     'purple': [proto_aster(s) for s in (6, 7, 8)],
     'grass':  [proto_grass_clump(s) for s in (9, 10, 11)],
     'rock':   [proto_rock(s) for s in (12, 13, 14)],
@@ -766,11 +779,21 @@ def furniture(f):
         rbox('woodshed_back', x + w / 2 - 0.02, y, 0, 0.03, d, h - 0.1, rot, timber)
         rbox('woodshed_roof', x + 0.05, y, h - 0.1, w + 0.25, d + 0.2, 0.05, rot, flat_mat('woodshed_roof', '#3f4347', rough=0.5, metallic=0.4))
         rbox('woodshed_stack', x + 0.05, y, 0.12, w - 0.2, d - 0.2, h - 0.35, rot, flat_mat('log_bark', '#5b4636', rough=0.95))
-        rng_ = np.random.default_rng(11); C, N, R = [], [], []
-        for zz in np.arange(0.18, h - 0.28, 0.13):
-            for yy in np.arange(-d / 2 + 0.18, d / 2 - 0.15, 0.14):
-                C.append([x - (w - 0.2) / 2 + 0.05 - 0.001, y + yy + rng_.uniform(-0.02, 0.02), zz + rng_.uniform(-0.02, 0.02)]); N.append([-1, 0, 0]); R.append(rng_.uniform(0.05, 0.075))
-        b = Builder(); b.add(*discs(np.array(C), np.array(N, float), np.array(R), rng_, 7)); b.obj('woodshed_log_ends', [flat_mat('end_grain', '#c9a27a', rough=0.9)])
+        rng_ = np.random.default_rng(11); face = x - (w - 0.2) / 2 + 0.05
+        tones = [flat_mat(f'end_grain_{i}', c, rough=0.9) for i, c in enumerate(('#d4ad80', '#c49565', '#b3875d'))]
+        bark = flat_mat('log_bark_ring', '#4a3a2c', rough=0.95)
+        groups = [[[], [], []] for _ in tones]; ring = [[], [], []]
+        row = 0
+        for zz in np.arange(0.17, h - 0.27, 0.115):
+            for yy in np.arange(-d / 2 + 0.16 + (row % 2) * 0.06, d / 2 - 0.14, 0.125):
+                r = rng_.uniform(0.04, 0.075); g = groups[int(rng_.integers(3))]
+                c = [face - rng_.uniform(0.0, 0.05), y + yy + rng_.uniform(-0.025, 0.025), zz + rng_.uniform(-0.02, 0.02)]
+                g[0].append(c); g[1].append([-1, rng_.normal(0, 0.08), rng_.normal(0, 0.08)]); g[2].append(r)
+                ring[0].append([c[0] + 0.004, c[1], c[2]]); ring[1].append([-1, 0, 0]); ring[2].append(r * 1.13)
+            row += 1
+        for i, (g, m) in enumerate(zip(groups, tones)):
+            if g[0]: b = Builder(); b.add(*discs(np.array(g[0]), np.array(g[1], float), np.array(g[2]), rng_, 9)); b.obj(f'woodshed_logs_{i}', [m])
+        b = Builder(); b.add(*discs(np.array(ring[0]), np.array(ring[1], float), np.array(ring[2]), rng_, 9)); b.obj('woodshed_bark', [bark])
     elif t == 'firebowl':
         r = f['r']; bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=16, radius=r)
         bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.z > 0.001], context='VERTS')
@@ -779,6 +802,11 @@ def furniture(f):
         o.modifiers.new('t', 'SOLIDIFY').thickness = 0.012
         o.location = (x, y, 0.42); o.scale = (1, 1, 0.55)
         b = Builder(); b.add(*tube([x, y, 0.03], [x, y, 0.2], r * 0.45, r * 0.3, 16)); b.obj('fire_bowl_stand', [o.data.materials[0]])
+    elif t == 'boulder' and ROCKS_M:
+        instance(ROCKS_M[0], x, y, -0.05, radius=f['r'], rot=f['x'] * 3.1)
+    elif t == 'stump':       # hollow tree-stump planter with a round top (photo 02)
+        r = f['r']; b = Builder(); b.add(*tube([x, y, 0.0], [x, y, 0.33], r * 1.05, r, 20)); b.obj('stump', [BARK])
+        b = Builder(); b.add(*discs(np.array([[x, y, 0.335]]), np.array([[0, 0, 1.0]]), r * 0.95, np.random.default_rng(2), 20)); b.obj('stump_top', [flat_mat('stump_top', '#b8a58c', rough=0.8)])
     elif t in ('chair', 'table'):
         black = flat_mat('powder_black', '#1f2123', rough=0.5, metallic=0.3); b = Builder()
         if t == 'table':
@@ -952,6 +980,37 @@ for i in range(4):
 for s in (-1, 1):   # running rails on the deck
     b = Builder(); b.add(*tube([px0 - 0.15, yc + s * 2.0, DECK_TOP + 0.01], [px1 + 1.2, yc + s * 2.0, DECK_TOP + 0.01], 0.02, 0.02, 4)); b.obj('cover_rail', [ALU])
 
+# ---------------------------------------------------------------- bioclimatic pergola (photos 02, 19)
+# Free-standing anthracite frame on the deck in front of the living room: three posts at the front, a deep perimeter
+# beam, tilting roof lamellas and frameless sliding glass walls on the front and the west side.
+for o in objs_with('frame'):
+    bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
+    x0_, x1_ = min(c.x for c in bb), max(c.x for c in bb); y0_, y1_ = min(c.y for c in bb), max(c.y for c in bb); z1_ = max(c.z for c in bb)
+    if x0_ > -0.2 and x1_ < 8.2 and y0_ > -10.9 and y1_ < -8.5 and z1_ > 2.3:
+        o.hide_render = True; o.hide_viewport = True
+PG = flat_mat('pergola_anthracite', '#33373b', rough=0.4, metallic=0.4)
+GLASS_WALL = flat_mat('pergola_glass', '#dfe9ea', rough=0.02, **{'Transmission Weight': 1.0, 'IOR': 1.5})
+deck_top, top = 0.15, 0.15 + 2.75
+x0, x1, yf, yb = 0.0, 7.95, -11.25, -8.65            # plan extent: house facade at z 8,65, front at about 11,25
+for xx in (x0 + 0.08, (x0 + x1) / 2, x1 - 0.08):
+    rbox('pergola_post', xx, yf + 0.08, deck_top, 0.15, 0.15, top - deck_top, 0, PG)
+rbox('pergola_beam_front', (x0 + x1) / 2, yf + 0.09, top - 0.24, x1 - x0, 0.18, 0.24, 0, PG)
+rbox('pergola_beam_back', (x0 + x1) / 2, yb - 0.09, top - 0.24, x1 - x0, 0.18, 0.24, 0, PG)
+for xx in (x0 + 0.09, x1 - 0.09):
+    rbox('pergola_beam_side', xx, (yf + yb) / 2, top - 0.24, 0.18, yb - yf, 0.24, 0, PG)
+n_l = int((x1 - x0 - 0.3) / 0.2)
+for i in range(n_l):                                  # lamellas run from the house to the front beam, slightly open
+    xx = x0 + 0.25 + i * 0.2
+    lam = rbox('pergola_lamella', xx, (yf + yb) / 2, top - 0.14, 0.17, yb - yf - 0.3, 0.025, 0, PG)
+    lam.rotation_euler = (0, math.radians(25), 0)
+for (xa, xb) in ((x0 + 0.16, (x0 + x1) / 2 - 0.08), ((x0 + x1) / 2 + 0.08, x1 - 0.16)):   # front glass, two panels per bay
+    mid = (xa + xb) / 2
+    for k_, (pa_, pb_) in enumerate(((xa, mid + 0.02), (mid - 0.02, xb))):
+        rbox('pergola_glass_front', (pa_ + pb_) / 2, yf + 0.06 + 0.03 * k_, deck_top + 0.03, pb_ - pa_, 0.01, top - deck_top - 0.3, 0, GLASS_WALL)
+    rbox('pergola_track', (xa + xb) / 2, yf + 0.08, deck_top, xb - xa, 0.1, 0.03, 0, PG)
+for k_, (ya, yb_) in enumerate(((yf + 0.16, (yf + yb) / 2 + 0.02), ((yf + yb) / 2 - 0.02, yb - 0.1))):   # west side glass
+    rbox('pergola_glass_side', x0 + 0.06 + 0.03 * k_, (ya + yb_) / 2, deck_top + 0.03, 0.01, abs(yb_ - ya), top - deck_top - 0.3, 0, GLASS_WALL)
+
 # ---------------------------------------------------------------- surroundings: sidewalks, kerbs, road, houses across the street, tree line
 CHAIN = [(22.99, -70.0)] + [tuple(D['P'][k]) for k in (1, 2, 3, 4, 5, 6, 9, 10, 11, 12)] + [(-70.0, 24.48)]
 def offset_chain(chain, w):
@@ -978,19 +1037,49 @@ for side, (w0, w1) in (('near', (0.02, 2.0)), ('far', (8.6, 10.6))):
 strip('verge_far', 10.6, 45.0, ST + 0.07, VERGE)
 for o in objs_with('cobble'): o.location.z -= 0.0   # the big Three.js street plane is the asphalt road now
 
-def house(x, y, rot, w=10.5, d=8.5, wall_h=3.1, ridge=3.4, seed=0):
+HOUSE_WALLS = {c: tex_mat(f'render_{c[1:]}', 'painted_plaster_wall', 2.0, tint=c, rough=1.0, bump=0.08)
+               for c in ('#f3f2ee', '#efe4d0', '#ecd6cb', '#e6e4dd')}
+def house(x, y, rot, w=10.5, d=8.5, wall_h=3.1, ridge=3.4, seed=0, base=None, wall=None):
+    """Neighbour house: rendered walls, tiled gable roof with overhangs, framed windows, a door, dark plinth."""
     rng = np.random.default_rng(seed); b = Builder()
-    hw, hd = w / 2, d / 2
+    hw, hd, ov = w / 2, d / 2, 0.45
     v = [(-hw, -hd, 0), (hw, -hd, 0), (hw, hd, 0), (-hw, hd, 0), (-hw, -hd, wall_h), (hw, -hd, wall_h), (hw, hd, wall_h), (-hw, hd, wall_h), (-hw, 0, wall_h + ridge), (hw, 0, wall_h + ridge)]
     b.add(np.array(v, float), np.array([[0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]]), 0)
-    b.add(np.array(v, float), np.array([[4, 5, 9, 8][::-1], [6, 7, 8, 9][::-1]]), 1)
     b.add(np.array(v, float), np.array([[5, 6, 9], [7, 4, 8]]), 0)
-    for k in range(3):   # a few dark windows on the long sides
-        for s in (-1, 1):
-            xx = -hw + (k + 0.7) * w / 3.4; yy = s * (hd + 0.02)
-            b.add(np.array([(xx, yy, 0.9), (xx + 1.3, yy, 0.9), (xx + 1.3, yy, 2.3), (xx, yy, 2.3)]), np.array([[0, 1, 2, 3] if s > 0 else [3, 2, 1, 0]]), 2)
-    o = b.obj(f'neighbour_house_{seed}', [MATS['wall'], MATS['roof'], GLASS])
-    o.location = (x, y, ST + 0.07); o.rotation_euler = (0, 0, rot); return o
+    # roof planes with overhang on eaves and gables, plus fascia boards
+    k = ridge / hd; e = wall_h - ov * k
+    R = [(-hw - ov, -hd - ov, e), (hw + ov, -hd - ov, e), (hw + ov, 0, wall_h + ridge), (-hw - ov, 0, wall_h + ridge),
+         (-hw - ov, hd + ov, e), (hw + ov, hd + ov, e)]
+    b.add(np.array(R, float), np.array([[0, 1, 2, 3], [5, 4, 3, 2]]), 1)
+    b.add(np.array(R, float) + [0, 0, -0.08], np.array([[3, 2, 1, 0], [2, 3, 4, 5]]), 3)
+    for s in (-1, 1):
+        b.add(np.array([(-hw - ov, s * (hd + ov), e - 0.2), (hw + ov, s * (hd + ov), e - 0.2), (hw + ov, s * (hd + ov), e), (-hw - ov, s * (hd + ov), e)]),
+              np.array([[0, 1, 2, 3] if s < 0 else [3, 2, 1, 0]]), 3)
+    b.add(np.array([(-hw - 0.01, -hd - 0.01, 0), (hw + 0.01, -hd - 0.01, 0), (hw + 0.01, -hd - 0.01, 0.35), (-hw - 0.01, -hd - 0.01, 0.35)]), np.array([[0, 1, 2, 3]]), 3)
+    def window(cx, cz, ww, wh, face):          # dark frame + glass on one of the four faces
+        nrm = {'S': (0, -1), 'N': (0, 1), 'E': (1, 0), 'W': (-1, 0)}[face]
+        off = (hd if face in 'SN' else hw) + 0.012
+        def q(du, dz, o):
+            if face in 'SN': return (cx + du, nrm[1] * (off + o), cz + dz)
+            return (nrm[0] * (off + o), cx + du, cz + dz)
+        fr = [q(-ww / 2 - 0.06, -0.06, 0), q(ww / 2 + 0.06, -0.06, 0), q(ww / 2 + 0.06, wh + 0.06, 0), q(-ww / 2 - 0.06, wh + 0.06, 0)]
+        gl = [q(-ww / 2, 0, 0.005), q(ww / 2, 0, 0.005), q(ww / 2, wh, 0.005), q(-ww / 2, wh, 0.005)]
+        flip = face in ('N', 'W')
+        b.add(np.array(fr, float), np.array([[3, 2, 1, 0] if flip else [0, 1, 2, 3]]), 3)
+        b.add(np.array(gl, float), np.array([[3, 2, 1, 0] if flip else [0, 1, 2, 3]]), 2)
+    n_long = max(2, int(w / 3.2))
+    for face in ('S', 'N'):
+        for i in range(n_long):
+            cx = -hw + (i + 0.5) * w / n_long + rng.uniform(-0.3, 0.3)
+            tall = rng.random() < 0.35
+            window(cx, 0.4 if tall else 0.9, rng.choice([1.0, 1.4, 2.0]), 2.2 if tall else 1.35, face)
+    for face in ('E', 'W'):
+        window(rng.uniform(-hd * 0.4, hd * 0.4), 0.9, 1.1, 1.3, face)
+        window(0.0, wall_h + 0.4, 0.9, 1.0, face)
+    window(hw * 0.55, 0.0, 1.0, 2.1, 'S')        # front door
+    wall = wall or HOUSE_WALLS[list(HOUSE_WALLS)[seed % len(HOUSE_WALLS)]]
+    o = b.obj(f'neighbour_house_{seed}', [wall, MATS['roof'], GLASS, MATS['frame']])
+    o.location = (x, y, ST + 0.07 if base is None else base); o.rotation_euler = (0, 0, rot); return o
 far = offset_chain(CHAIN, 22.0)
 seed = 0
 for (ax, az), (bx, bz) in zip(far[:-1], far[1:]):
@@ -999,7 +1088,7 @@ for (ax, az), (bx, bz) in zip(far[:-1], far[1:]):
         f = t / seg; x, y = b2((ax + (bx - ax) * f, az + (bz - az) * f))
         if abs(x - 11) > 60 or abs(y + 13) > 60: continue
         house(x, y, ang, seed=seed); seed += 1
-house(*b2((-13.5, 9.0)), 0.0, w=10, d=9, wall_h=3.0, ridge=2.6, seed=99)   # west neighbour, gable towards us (photo 17)
+house(*b2((-13.5, 9.0)), 0.0, w=10, d=9, wall_h=3.0, ridge=2.6, seed=99, base=0.0, wall=HOUSE_WALLS['#efe4d0'])   # west neighbour, beige, gable towards us (photo 17)
 if TREE_M:
     rng = np.random.default_rng(3)
     for x in np.arange(-70, 80, 5.5):                    # tree line beyond the field and the neighbours
