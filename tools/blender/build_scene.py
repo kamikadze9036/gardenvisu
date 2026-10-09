@@ -30,6 +30,7 @@ D['VIEWS'] += [
     {'key': 'north-path', 'pos': [-3.0, 1.65, -1.85], 'tgt': [9.0, 0.2, -1.95]},   # along the stepping stones behind the house
     {'key': 'yard',       'pos': [14.4, 1.65, -1.0], 'tgt': [21.0, 0.3, 1.4]},     # the yard behind the garage, fire bowl, play house     # along the stepping stones behind the house
     {'key': 'pool',       'pos': [9.6, 1.6, 18.8],   'tgt': [3.0, 0.3, 13.6]},     # the deck and pool enclosure from the lawn
+    {'key': 'nw-corner',  'pos': [-1.5, 12.0, 4.0],  'tgt': [-1.5, 0.0, -0.5]},      # from above: west strip joining the bed behind the house
 ]
 VIEWS = arg('--views', ','.join(v['key'] for v in D['VIEWS'])).split(',')
 SAMPLES = int(arg('--samples', 128))

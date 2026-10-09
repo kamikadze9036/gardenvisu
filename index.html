@@ -83,9 +83,10 @@ const LAWN = [
 const DRIVE = [[14.9,12.8],[23.5,12.8],[23.7,23.2],[18.4,23.2],[14.4,16.8],[12.6,14.0],[12.6,13.45],[14.9,13.45]];
 const RAMP  = [[18.4,23.2],[23.7,23.2],[24.9,31.07],[18.4,31.07]];
 const PATIO = [[11.4,8.65],[11.78,8.65],[11.78,7.55],[14.9,7.55],[14.9,13.45],[12.6,14.0],[14.3,17.1],[13.0,18.4],[10.6,17.4],[10.6,13.8],[11.4,13.8]];
-const DECK  = [[-0.3,7.55],[7.93,7.55],[7.93,8.65],[11.4,8.65],[11.4,13.8],[10.6,13.8],[10.6,17.4],[-0.3,17.4]];
-const DECK_EDGE = [[-0.65,7.4],[7.93,7.4],[7.93,8.65],[11.75,8.65],[11.75,14.15],[10.95,14.15],[10.95,17.75],[-0.65,17.75]];
-const POOL  = [[0.5,12.9],[7.0,12.9],[7.0,16.5],[0.5,16.5]];
+// The deck ends flush with the west wall of the house (x 0); the pool sits about 1,15 m in from that edge (photos 19, 22).
+const DECK  = [[0.35,7.55],[7.93,7.55],[7.93,8.65],[11.4,8.65],[11.4,13.8],[10.6,13.8],[10.6,17.4],[0.35,17.4]];
+const DECK_EDGE = [[0,7.4],[7.93,7.4],[7.93,8.65],[11.75,8.65],[11.75,14.15],[10.95,14.15],[10.95,17.75],[0,17.75]];
+const POOL  = [[1.15,12.9],[7.65,12.9],[7.65,16.5],[1.15,16.5]];
 const HOUSE = [[0,0],[14.9,0],[14.9,8.65],[0,8.65]];
 const GARAGE= [[14.9,4.3],[23.0,4.3],[23.0,12.8],[14.9,12.8]];
 const PLANTERS = [[13.2,15.5],[16.1,20.0]]; // x ranges, z -3.8 .. -2.4
@@ -113,23 +114,24 @@ const SPECIES = {
 // where perennials are already planted and runs south to the level of the pool (the 12 m bed first, then the 6 m bed).
 // The wider bare patch by the deck goes back to lawn. First plant of each row is the north end, back row is by the shrubs.
 const PLAN_BEDS = [
-  {x0:-3.88, z0:-0.3, len:12,
+  {x0:-3.88, z0:-0.4, len:12,
    back: [6,1,5,8,6,2,3,8,1,5,6,2,8,6,1,5,3,8,1,6,5,2,8,6],
    front:[7,3,9,10,2,4,4,4,9,5,7,2,10,3,7,9,4,4,4,5,2,10,9,7]},
-  {x0:-3.88, z0:11.9, len:6,
+  {x0:-3.88, z0:11.6, len:6,
    back: [2,8,5,1,6,5,8,2,5,1,6,3],
    front:[2,10,3,5,9,7,3,10,2,5,7,9]}
 ];
 // Behind the house (photos 13, 14; 2,71 + 2,00 m from the wall to the boundary in the site plan C.2): the former lawn between the pebble strip by the wall and the bed along the
 // chain-link fence becomes a perennial bed with a stepping-stone path (inspiration photo in podklady/navrh).
-const NORTH_BED = [[-2.6,-3.3],[14.9,-3.3],[14.9,-0.4],[-2.6,-0.4]];
+const NORTH_BED = [[-3.88,-3.3],[14.9,-3.3],[14.9,-0.4],[-3.88,-0.4]];   // starts at the west strip, no lawn left in the corner
 // Yard behind the garage (photos 10–12): bare soil between the strip of fountain grass and hydrangeas and the garage
 // wall. Proposal: the path continues to a round pebble area with the corten fire bowl, perennials around.
 const NE_YARD   = [[14.9,-2.4],[21.7,-2.4],[21.7,-0.3],[22.8,-0.3],[22.8,3.3],[14.9,3.3]];
 const FIRE      = {x:20.6, z:1.55, r:1.45};
 // Pebble strips with a concrete edge: along the north wall of the house, the east gable and the garage's north wall
 const GRAVEL = [
-  [[0,-0.4],[14.9,-0.4],[14.9,0],[0,0]],
+  [[-0.4,-0.4],[14.9,-0.4],[14.9,0],[-0.4,0]],
+  [[-0.4,0],[0,0],[0,7.4],[-0.4,7.4]],          // along the west wall of the house down to the deck
   [[14.9,0],[15.25,0],[15.25,4.3],[14.9,4.3]],
   [[15.25,3.95],[23.0,3.95],[23.0,4.3],[15.25,4.3]],
   // pebble bed between the entrance paving and the deck: hydrangeas, boulders, dwarf pine, grass (photos 01, 02)
@@ -267,7 +269,7 @@ const FREE = (x,z) => !nearPath(x,z,PATH.across/2+0.15) && Math.hypot(x-FIRE.x,z
 {
   const r2 = rng(7);
   [[NORTH_BED,[2,3,5,7,9,4,10,2,7]],[NE_YARD,[1,6,8,5,2,3,9,7,10]]].forEach(([bed,MIX])=>{
-    for (let x=-2.6; x<22.8; x+=0.42) for (let z=-3.3; z<3.3; z+=0.42) {
+    for (let x=-3.8; x<22.8; x+=0.42) for (let z=-3.3; z<3.3; z+=0.42) {
       const px=x+(r2()-0.5)*0.2, pz=z+(r2()-0.5)*0.2;
       if (!inPoly(px,pz,bed) || !FREE(px,pz) || pz>-0.55 && bed===NORTH_BED) continue;
       DESIGN_PLANTS.push({sp:MIX[(r2()*MIX.length)|0], x:px, z:pz, rot:r2()*Math.PI*2});
@@ -556,9 +558,9 @@ function build(renderer){
   slab(G.terrace,DECK_EDGE,0,0.1,MAT.edge);
   slab(G.terrace,DECK,0,F,MAT.deck,[POOL]);
   flat(G.terrace,POOL,0.02,MAT.water);
-  box(G.terrace,0.4,7.1,0.12,0.17,12.8,12.9,MAT.edge); box(G.terrace,0.4,7.1,0.12,0.17,16.5,16.6,MAT.edge);
+  box(G.terrace,1.05,7.75,0.12,0.17,12.8,12.9,MAT.edge); box(G.terrace,1.05,7.75,0.12,0.17,16.5,16.6,MAT.edge);
   for(let i=0;i<4;i++){
-    const r=1.98-i*0.06, len=1.7, x=0.45+i*1.6+len/2;
+    const r=1.98-i*0.06, len=1.7, x=1.1+i*1.6+len/2;
     const seg=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,28,1,true,Math.PI,Math.PI),MAT.cover);
     seg.rotation.z=-Math.PI/2; seg.scale.set(0.3,1,1); seg.position.set(x,0.15,14.7); G.terrace.add(seg);
     [-1,1].forEach(s=>box(G.terrace,x-len/2,x+len/2,0.15,0.2,14.7+s*r-0.04,14.7+s*r+0.04,MAT.alu));
