@@ -248,16 +248,19 @@ def block_mat():
     return m
 
 def clear_panel_mat():
-    """Thin clear polycarbonate sheet: mostly see-through with a glossy reflection."""
+    """Polycarbonate panels of the pool enclosure: see-through but slightly milky, with a soft reflection."""
     m, nt, bsdf = new_mat('polycarbonate_clear')
     out = nt.nodes['Material Output']
-    tp = nt.nodes.new('ShaderNodeBsdfTransparent'); tp.inputs['Color'].default_value = lin('#eef6f2')
-    gl = nt.nodes.new('ShaderNodeBsdfGlossy'); gl.inputs['Roughness'].default_value = 0.03
+    tp = nt.nodes.new('ShaderNodeBsdfTransparent'); tp.inputs['Color'].default_value = lin('#e9f1ef')
+    df = nt.nodes.new('ShaderNodeBsdfTranslucent'); df.inputs['Color'].default_value = lin('#dfe8e6')
+    milk = nt.nodes.new('ShaderNodeMixShader'); milk.inputs['Fac'].default_value = 0.22
+    link(nt, tp.outputs[0], milk.inputs[1]); link(nt, df.outputs[0], milk.inputs[2])
+    gl = nt.nodes.new('ShaderNodeBsdfGlossy'); gl.inputs['Roughness'].default_value = 0.08
     fr = nt.nodes.new('ShaderNodeFresnel'); fr.inputs['IOR'].default_value = 1.58
-    k = nt.nodes.new('ShaderNodeMath'); k.operation = 'MULTIPLY'; k.inputs[1].default_value = 0.35
+    k = nt.nodes.new('ShaderNodeMath'); k.operation = 'MULTIPLY'; k.inputs[1].default_value = 0.3
     link(nt, fr.outputs[0], k.inputs[0])
     mix = nt.nodes.new('ShaderNodeMixShader')
-    link(nt, k.outputs[0], mix.inputs['Fac']); link(nt, tp.outputs[0], mix.inputs[1]); link(nt, gl.outputs[0], mix.inputs[2])
+    link(nt, k.outputs[0], mix.inputs['Fac']); link(nt, milk.outputs[0], mix.inputs[1]); link(nt, gl.outputs[0], mix.inputs[2])
     link(nt, mix.outputs[0], out.inputs['Surface'])
     return m
 
@@ -914,8 +917,8 @@ wv = mesh_obj('pool_water', [(x, y, POOL_FLOOR + 0.01) for x, y in c] + [(x, y, 
 for o in objs_with('water'):
     if o != wv: o.hide_render = True
 
-# ---------------------------------------------------------------- telescopic pool enclosure (after the photo in podklady/navrh)
-# Four low segments sliding over each other, flat-topped arch, clear panels, anodised aluminium arches and rails.
+# ---------------------------------------------------------------- telescopic pool enclosure (photos 02, 05, 19)
+# Four low angular segments sliding over each other, milky clear panels, anthracite profiles and rails.
 for o in objs_with('cover'): o.hide_render = True; o.hide_viewport = True
 for o in objs_with('alu'):
     bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
@@ -924,24 +927,27 @@ for o in objs_with('alu'):
 PANEL = clear_panel_mat()
 ALU = flat_mat('anthracite_alu', '#3a3e43', rough=0.35, metallic=0.6)   # profiles are anthracite (photo 05)
 yc = (py0 + py1) / 2; DECK_TOP = 0.15
-def profile(half, h, k=28, p=4.0):
-    t = np.linspace(-np.pi / 2, np.pi / 2, k)
-    return np.c_[half * np.sign(np.sin(t)) * np.abs(np.sin(t)) ** (2 / p), h * np.abs(np.cos(t)) ** (2 / p)]
+def profile(half, h):
+    """Angular low enclosure (photos 02, 05, 19): short upright sides, a chamfer, flat top."""
+    side, cham = 0.16, 0.42
+    return np.array([[-half, 0.0], [-half, side], [-half + cham, h], [half - cham, h], [half, side], [half, 0.0]])
 for i in range(4):
-    half, h = 1.98 - i * 0.05, 0.56 - i * 0.04
+    half, h = 1.98 - i * 0.05, 0.52 - i * 0.035
     xa = px0 - 0.1 + i * 1.62; xb = xa + 1.72
     pr = profile(half, h); n = len(pr)
     verts = [(xa, yc + y, DECK_TOP + z) for y, z in pr] + [(xb, yc + y, DECK_TOP + z) for y, z in pr]
     faces = [(j, j + 1, n + j + 1, n + j) for j in range(n - 1)]
     if i == 0: faces.append(tuple(range(n - 1, -1, -1)))            # closed end towards the house
     if i == 3: faces.append(tuple(range(n, 2 * n)))
-    mesh_obj(f'cover_panel_{i}', verts, faces, [PANEL], smooth=True)
+    mesh_obj(f'cover_panel_{i}', verts, faces, [PANEL], smooth=False)
     b = Builder()
-    for xx in (xa, xb, (xa + xb) / 2):
+    for xx in (xa, xb, (xa + xb) / 2):                                # arches at both ends and in the middle
         for (y0_, z0_), (y1_, z1_) in zip(pr[:-1], pr[1:]):
-            b.add(*tube([xx, yc + y0_, DECK_TOP + z0_], [xx, yc + y1_, DECK_TOP + z1_], 0.022, 0.022, 6))
-    for s in (-1, 1):
-        b.add(*tube([xa, yc + s * half, DECK_TOP + 0.03], [xb, yc + s * half, DECK_TOP + 0.03], 0.035, 0.035, 4))
+            b.add(*tube([xx, yc + y0_, DECK_TOP + z0_], [xx, yc + y1_, DECK_TOP + z1_], 0.025, 0.025, 4))
+    for y_, z_ in pr[1:-1]:                                            # profiles along every break of the shape
+        b.add(*tube([xa, yc + y_, DECK_TOP + z_], [xb, yc + y_, DECK_TOP + z_], 0.02, 0.02, 4))
+    for s_ in (-1, 1):
+        b.add(*tube([xa, yc + s_ * half, DECK_TOP + 0.03], [xb, yc + s_ * half, DECK_TOP + 0.03], 0.035, 0.035, 4))
     b.obj(f'cover_frame_{i}', [ALU])
 for s in (-1, 1):   # running rails on the deck
     b = Builder(); b.add(*tube([px0 - 0.15, yc + s * 2.0, DECK_TOP + 0.01], [px1 + 1.2, yc + s * 2.0, DECK_TOP + 0.01], 0.02, 0.02, 4)); b.obj('cover_rail', [ALU])
