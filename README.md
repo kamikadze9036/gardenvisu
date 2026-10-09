@@ -116,7 +116,17 @@ ssh dell 'cd ~/Projects/gardenvisu/tools/blender && nohup ~/Applications/blender
   > out/fly.log 2>&1 &'
 ```
 
-Volby: `--engine eevee|cycles`, `--seconds 24`, `--fps 25`, `--res`, `--samples`, `--frames 1-50`. Eevee na Dellu bez monitoru funguje jen s `--gpu-backend vulkan` (s OpenGL se zasekne) a vychází asi na 23 s na snímek, protože každý snímek znovu synchronizuje celou scénu. Cycles se 16 vzorky v 960×540 dá asi 10 s na snímek, 28s průlet (700 snímků) je hotový zhruba za 2 hodiny. Finální verze 1280×720 se 64 vzorky by trvala zhruba 6–8 hodin. Trasa se mění v poli `ROUTE` ve `flythrough.py`.
+Volby: `--engine eevee|cycles`, `--seconds 24`, `--fps 25`, `--res`, `--samples`, `--frames 1-50`, `--png`, `--blur`. Rychlost kamery se mění podél trasy (třetí hodnota v `ROUTE`).
+
+Finální kvalita přes noc: s `--png` se ukládají jednotlivé snímky do `out/fly_frames/`. Přerušený render pak po restartu pokračuje, hotové snímky přeskočí. Video z nich složí `encode_video.py` přes sekvencer Blenderu, protože na Dellu není ffmpeg:
+
+```
+ssh dell 'cd ~/Projects/gardenvisu/tools/blender && nohup sh -c "~/Applications/blender/blender -b --factory-startup \
+  --python build_scene.py --python flythrough.py -- --no-render --engine cycles --samples 32 --res 1280x720 --seconds 28 --png \
+  > out/fly_hq.log 2>&1; ~/Applications/blender/blender -b --factory-startup --python encode_video.py -- --fps 25 > out/encode.log 2>&1" &'
+```
+
+V 1280×720 se 32 vzorky trvá snímek 20–35 s, 700 snímků tedy asi 5–6 hodin. Motion blur (`--blur`) render zhruba zdvojnásobí. Eevee na Dellu bez monitoru funguje jen s `--gpu-backend vulkan` (s OpenGL se zasekne) a vychází asi na 23 s na snímek, protože každý snímek znovu synchronizuje celou scénu. Cycles se 16 vzorky v 960×540 dá asi 10 s na snímek, 28s průlet (700 snímků) je hotový zhruba za 2 hodiny. Finální verze 1280×720 se 64 vzorky by trvala zhruba 6–8 hodin. Trasa se mění v poli `ROUTE` ve `flythrough.py`.
 
 ## Procházení modelu (plán)
 
