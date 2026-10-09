@@ -982,14 +982,13 @@ for s in (-1, 1):   # running rails on the deck
 
 # ---------------------------------------------------------------- bioclimatic pergola (photos 02, 19)
 # Free-standing anthracite frame on the deck in front of the living room: three posts at the front, a deep perimeter
-# beam, tilting roof lamellas and frameless sliding glass walls on the front and the west side.
+# beam and tilting roof lamellas. Open sides, no glazing.
 for o in objs_with('frame'):
     bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
     x0_, x1_ = min(c.x for c in bb), max(c.x for c in bb); y0_, y1_ = min(c.y for c in bb), max(c.y for c in bb); z1_ = max(c.z for c in bb)
     if x0_ > -0.2 and x1_ < 8.2 and y0_ > -10.9 and y1_ < -8.5 and z1_ > 2.3:
         o.hide_render = True; o.hide_viewport = True
 PG = flat_mat('pergola_anthracite', '#33373b', rough=0.4, metallic=0.4)
-GLASS_WALL = flat_mat('pergola_glass', '#dfe9ea', rough=0.02, **{'Transmission Weight': 1.0, 'IOR': 1.5})
 deck_top, top = 0.15, 0.15 + 2.75
 x0, x1, yf, yb = 0.0, 7.95, -11.25, -8.65            # plan extent: house facade at z 8,65, front at about 11,25
 for xx in (x0 + 0.08, (x0 + x1) / 2, x1 - 0.08):
@@ -1003,13 +1002,6 @@ for i in range(n_l):                                  # lamellas run from the ho
     xx = x0 + 0.25 + i * 0.2
     lam = rbox('pergola_lamella', xx, (yf + yb) / 2, top - 0.14, 0.17, yb - yf - 0.3, 0.025, 0, PG)
     lam.rotation_euler = (0, math.radians(25), 0)
-for (xa, xb) in ((x0 + 0.16, (x0 + x1) / 2 - 0.08), ((x0 + x1) / 2 + 0.08, x1 - 0.16)):   # front glass, two panels per bay
-    mid = (xa + xb) / 2
-    for k_, (pa_, pb_) in enumerate(((xa, mid + 0.02), (mid - 0.02, xb))):
-        rbox('pergola_glass_front', (pa_ + pb_) / 2, yf + 0.06 + 0.03 * k_, deck_top + 0.03, pb_ - pa_, 0.01, top - deck_top - 0.3, 0, GLASS_WALL)
-    rbox('pergola_track', (xa + xb) / 2, yf + 0.08, deck_top, xb - xa, 0.1, 0.03, 0, PG)
-for k_, (ya, yb_) in enumerate(((yf + 0.16, (yf + yb) / 2 + 0.02), ((yf + yb) / 2 - 0.02, yb - 0.1))):   # west side glass
-    rbox('pergola_glass_side', x0 + 0.06 + 0.03 * k_, (ya + yb_) / 2, deck_top + 0.03, 0.01, abs(yb_ - ya), top - deck_top - 0.3, 0, GLASS_WALL)
 
 # ---------------------------------------------------------------- surroundings: sidewalks, kerbs, road, houses across the street, tree line
 CHAIN = [(22.99, -70.0)] + [tuple(D['P'][k]) for k in (1, 2, 3, 4, 5, 6, 9, 10, 11, 12)] + [(-70.0, 24.48)]
