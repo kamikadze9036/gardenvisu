@@ -102,25 +102,59 @@ const SPECIES = {
   7: {cz:'Marulka lékařská',      lat:'Calamintha nepeta',          kind:'cloud',      h:0.35, d:0.45, leaf:'#6a8a4a', flower:'#ddd0ec'},
   8: {cz:'Svíčkovec Lindheimerův',lat:'Gaura lindheimeri',          kind:'wands',      h:0.9,  d:0.6,  leaf:'#5b7a3a', flower:'#f6eef2'},
   9: {cz:'Hvězdnice keřovitá',    lat:'Aster dumosus',              kind:'cushion',    h:0.35, d:0.45, leaf:'#3f6a30', flower:'#9b74c9', eye:'#e0b030'},
-  10:{cz:'Hlaváč fialový',        lat:'Scabiosa columbaria',        kind:'pincushion', h:0.5,  d:0.4,  leaf:'#6a8050', flower:'#a3a8de'}
+  10:{cz:'Hlaváč fialový',        lat:'Scabiosa columbaria',        kind:'pincushion', h:0.5,  d:0.4,  leaf:'#6a8050', flower:'#a3a8de'},
+  // already growing on the yard behind the garage (photos 10–12)
+  11:{cz:'Hortenzie latnatá',     lat:'Hydrangea paniculata',       kind:'hydrangea',  h:1.1,  d:1.0,  leaf:'#4a6b33', flower:'#e6b9b0'},
+  12:{cz:'Dochan psárkovitý',     lat:'Pennisetum alopecuroides',   kind:'plume',      h:0.7,  d:0.7,  leaf:'#8a9a58', flower:'#c8bca0'},
+  13:{cz:'Ozdobnice čínská',      lat:'Miscanthus sinensis',        kind:'grass',      h:1.6,  d:0.8,  leaf:'#7d9460'}
 };
 // Bed extension, 1 m deep, two rows 0,5 m apart, plants every 0,5 m (scale of the plan 2 cm = 1 m).
-// Assumption: in front of the shrubs along the west fence, the 12 m bed from the house corner southwards,
-// the 6 m bed right after it; the first plant of each row is the north end. Back row is the one by the shrubs.
+// Photos 15–20: one continuous strip in front of the shrubs along the west fence, from the south edge of the pool
+// almost to the north-west corner. Assumed: the 12 m bed is the southern, still bare part, the 6 m bed the northern part
+// where small perennials are already in; the first plant of each row is the north end, the back row is by the shrubs.
 const PLAN_BEDS = [
-  {x0:-3.88, z0:-0.2, len:12,
+  {x0:-3.88, z0:6.0, len:12,
    back: [6,1,5,8,6,2,3,8,1,5,6,2,8,6,1,5,3,8,1,6,5,2,8,6],
    front:[7,3,9,10,2,4,4,4,9,5,7,2,10,3,7,9,4,4,4,5,2,10,9,7]},
-  {x0:-3.88, z0:12.1, len:6,
+  {x0:-3.88, z0:-0.3, len:6,
    back: [2,8,5,1,6,5,8,2,5,1,6,3],
    front:[2,10,3,5,9,7,3,10,2,5,7,9]}
 ];
-// Behind the house (north): gravel strip along the wall, stepping-stone path through a perennial bed,
-// the two raised planters stay by the fence (after the inspiration photo in podklady/navrh).
-const NORTH_BED = [[-2.88,-2.45],[22.99,-2.45],[22.99,-0.4],[-2.88,-0.4]];
-const GRAVEL    = [[0,-0.4],[14.9,-0.4],[14.9,0],[0,0]];
-const PATH = {z:-1.45, x0:-3.4, x1:22.5, along:0.4, across:1.0, gap:0.2};   // concrete slabs 1,0 × 0,4 m
-const DESIGN_BEDS = [NORTH_BED, ...PLAN_BEDS.map(b=>[[b.x0,b.z0],[b.x0+1,b.z0],[b.x0+1,b.z0+b.len],[b.x0,b.z0+b.len]])];
+// Behind the house (photos 13, 14): the former lawn between the pebble strip by the wall and the bed along the
+// chain-link fence becomes a perennial bed with a stepping-stone path (inspiration photo in podklady/navrh).
+const NORTH_BED = [[-2.6,-3.3],[14.9,-3.3],[14.9,-0.4],[-2.6,-0.4]];
+// Yard behind the garage (photos 10–12): bare soil between the strip of fountain grass and hydrangeas and the garage
+// wall. Proposal: the path continues to a round pebble area with the corten fire bowl, perennials around.
+const NE_YARD   = [[14.9,-2.4],[21.7,-2.4],[21.7,-0.3],[22.8,-0.3],[22.8,3.3],[14.9,3.3]];
+const FIRE      = {x:20.6, z:1.55, r:1.45};
+// Pebble strips with a concrete edge: along the north wall of the house, the east gable and the garage's north wall
+const GRAVEL = [
+  [[0,-0.4],[14.9,-0.4],[14.9,0],[0,0]],
+  [[14.9,0],[15.25,0],[15.25,4.3],[14.9,4.3]],
+  [[15.25,3.95],[23.0,3.95],[23.0,4.3],[15.25,4.3]]
+];
+// Stepping stones 1,0 × 0,4 m every 0,6 m along a polyline: behind the house, round the corner to the fire area
+const PATH = {pts:[[-2.3,-1.85],[14.3,-1.85],[15.5,-0.3],[16.6,0.5],[19.2,1.1]], along:0.4, across:1.0, gap:0.2};
+function pathPoints(){        // centre and direction of each slab
+  const out=[]; let carry=0;
+  for(let i=0;i<PATH.pts.length-1;i++){
+    const [ax,az]=PATH.pts[i],[bx,bz]=PATH.pts[i+1],len=Math.hypot(bx-ax,bz-az);
+    for(let s=carry;s<len;s+=PATH.along+PATH.gap){ const t=s/len; out.push({x:ax+(bx-ax)*t, z:az+(bz-az)*t, ang:Math.atan2(bz-az,bx-ax)}); carry=s+PATH.along+PATH.gap-len; }
+  }
+  return out;
+}
+const SLABS = pathPoints();
+const nearPath = (x,z,d) => PATH.pts.slice(1).some((p,i)=>distSeg(x,z,PATH.pts[i],p)<d);
+// Things that already stand there (photos 10–12, 14): play house, woodshed, chairs by the garage
+const FURNITURE = [
+  {type:'playhouse', x:20.5, z:-3.75, w:1.8, d:1.3, h:1.7, rot:0},
+  {type:'woodshed',  x:22.35, z:-1.9, w:0.9, d:3.0, h:2.0, rot:0},
+  {type:'firebowl',  x:FIRE.x, z:FIRE.z, r:0.4},
+  {type:'chair',     x:16.6, z:3.45, rot:Math.PI*0.95},
+  {type:'chair',     x:17.9, z:3.45, rot:Math.PI*1.08},
+  {type:'table',     x:17.25, z:3.6, r:0.28}
+];
+const DESIGN_BEDS = [NORTH_BED, NE_YARD, ...PLAN_BEDS.map(b=>[[b.x0,b.z0],[b.x0+1,b.z0],[b.x0+1,b.z0+b.len],[b.x0,b.z0+b.len]])];
 
 // Trees: position, height, crown radius, colour
 const TREES = [
@@ -129,7 +163,12 @@ const TREES = [
   {kind:'conifer',  x:16.4,z:29.2,h:3.4,r:1.1,c:'#3e6a45'},   // weeping conifer by the gate
   {kind:'conifer',  x:25.6,z:11.4,h:2.2,r:0.7,c:'#2f5a3a'},   // small spruce on the east lawn
   {kind:'deciduous',x:-4.7,z:4.5, h:3.2,r:1.2,c:'#4f7a3a'},   // large shrubs in the west border
-  {kind:'deciduous',x:-4.7,z:14.0,h:3.0,r:1.1,c:'#5d8a45'}
+  {kind:'deciduous',x:-4.7,z:14.0,h:3.0,r:1.1,c:'#5d8a45'},
+  {kind:'deciduous',x:-4.9,z:9.6, h:6.5,r:2.2,c:'#6f8f45'},   // large tree in the west bed (photos 15, 19, 20)
+  {kind:'conifer',  x:-4.2,z:7.4, h:2.6,r:0.55,c:'#8aa3ad'},  // two blue cedars on stakes
+  {kind:'conifer',  x:-4.5,z:8.5, h:2.8,r:0.6, c:'#8aa3ad'},
+  {kind:'deciduous',x:3.2, z:-4.0,h:3.0,r:1.0,c:'#5a2d3a'},   // purple-leaved tree by the north fence (photo 14)
+  {kind:'deciduous',x:-1.6,z:-3.9,h:2.4,r:0.8,c:'#8a9a40'}    // weeping tree on stakes in the north-west corner (photo 16)
 ];
 
 const H = {eave:4.15, ridge:7.72, garage:2.97, street:-0.9, wallTop:0.7};
@@ -173,7 +212,7 @@ const fmt = n => n.toLocaleString('cs-CZ',{maximumFractionDigits:0});
 
 // Bed planting: jittered grid over the plot, kept where it isn't lawn, paving, deck or a building.
 const rand = rng(42);
-const BLOCKED = [LAWN, DRIVE, RAMP, PATIO, DECK_EDGE, HOUSE, GARAGE];
+const BLOCKED = [LAWN, DRIVE, RAMP, PATIO, DECK_EDGE, HOUSE, GARAGE, ...DESIGN_BEDS];
 const PLANTS = [];
 let bedCells = 0;
 const STEP = 0.72;
@@ -188,8 +227,8 @@ for (let gx=-5.6; gx<28.9; gx+=STEP) for (let gz=-4.7; gz<31.1; gz+=STEP) {
   if (near) continue;
   const zone = x<-3.6 ? 'west' : z<-2.4 ? 'north' : (x>23.6&&z>23) ? 'rock' : (x>27||(x>22.9&&z<7)) ? 'east' : 'south';
   const MIX = {
-    west: [['green',.6,.6,1.1],['grass',.25,.4,.6],['burg',.15,.5,.8]],
-    north:[['green',.45,.3,.6],['grass',.35,.3,.5],['purple',.2,.25,.4]],
+    west: [['green',.55,.9,1.5],['grass',.2,.5,.8],['burg',.25,.8,1.3]],
+    north:[['green',.5,.5,.9],['grass',.3,.35,.55],['purple',.2,.3,.45]],
     south:[['grass',.35,.35,.6],['purple',.2,.3,.45],['burg',.12,.4,.7],['green',.25,.3,.6],['rock',.08,.2,.4]],
     rock: [['rock',.4,.2,.5],['grass',.25,.3,.5],['green',.35,.25,.45]],
     east: [['green',.5,.3,.55],['purple',.2,.25,.4],['grass',.3,.3,.5]]
@@ -200,18 +239,31 @@ for (let gx=-5.6; gx<28.9; gx+=STEP) for (let gz=-4.7; gz<31.1; gz+=STEP) {
 }
 const bedArea = bedCells*STEP*STEP;
 
-// Design planting: the plan rows as drawn, plus a loose mix along the north path.
+// Design planting: the plan rows as drawn, the plants already growing behind the garage, and a loose mix of the
+// plan's species on the bare soil behind the house and the garage.
 const DESIGN_PLANTS = [];
 PLAN_BEDS.forEach(b=>[['back',0.25,0],['front',0.75,0.25]].forEach(([row,dx,dz])=>{
   b[row].forEach((sp,i)=>{ const z=b.z0+dz+0.125+i*b.len/b[row].length; if(z<b.z0+b.len) DESIGN_PLANTS.push({sp, x:b.x0+dx, z, rot:rand()*Math.PI*2}); });
 }));
+const EXISTING = [   // strip of fountain grass and hydrangeas (photos 10–12), the bed by the garage wall
+  ...[16.7,17.4,18.1,18.8,19.5,20.2,20.9,21.5].map((x,i)=>({sp:i%3===2?11:12, x, z:-0.95+(i%2)*0.25})),
+  {sp:13,x:15.6,z:3.65},{sp:11,x:16.0,z:2.9},{sp:11,x:19.0,z:3.55},{sp:11,x:20.1,z:3.6},{sp:13,x:21.4,z:3.6},{sp:12,x:22.3,z:3.2}
+];
+EXISTING.forEach(p=>DESIGN_PLANTS.push({...p, rot:rand()*Math.PI*2, existing:true}));
+const FREE = (x,z) => !nearPath(x,z,PATH.across/2+0.15) && Math.hypot(x-FIRE.x,z-FIRE.z)>FIRE.r+0.2
+  && !(z<-2.25 && PLANTERS.some(([a,b])=>x>a-0.25&&x<b+0.25))
+  && !EXISTING.some(e=>Math.hypot(x-e.x,z-e.z)<SPECIES[e.sp].d*0.6)
+  && !FURNITURE.some(f=>Math.abs(x-f.x)<(f.w||1)/2+0.3 && Math.abs(z-f.z)<(f.d||1)/2+0.3)
+  && !(x>21.6 && z<-0.2);
 {
-  const r2 = rng(7), MIX = [2,3,5,7,9,4,10,2,7];
-  for (let x=-2.6; x<22.8; x+=0.42) for (let z=-2.3; z<-0.45; z+=0.42) {
-    const px=x+(r2()-0.5)*0.2, pz=z+(r2()-0.5)*0.2;
-    if (Math.abs(pz-PATH.z)<PATH.across/2+0.15) continue;
-    DESIGN_PLANTS.push({sp:MIX[(r2()*MIX.length)|0], x:px, z:pz, rot:r2()*Math.PI*2});
-  }
+  const r2 = rng(7);
+  [[NORTH_BED,[2,3,5,7,9,4,10,2,7]],[NE_YARD,[1,6,8,5,2,3,9,7,10]]].forEach(([bed,MIX])=>{
+    for (let x=-2.6; x<22.8; x+=0.42) for (let z=-3.3; z<3.3; z+=0.42) {
+      const px=x+(r2()-0.5)*0.2, pz=z+(r2()-0.5)*0.2;
+      if (!inPoly(px,pz,bed) || !FREE(px,pz) || pz>-0.55 && bed===NORTH_BED) continue;
+      DESIGN_PLANTS.push({sp:MIX[(r2()*MIX.length)|0], x:px, z:pz, rot:r2()*Math.PI*2});
+    }
+  });
 }
 
 // ---------- Spec cards ----------
@@ -225,7 +277,7 @@ const INFO = [
   {name:'Trávník', d:`cca ${fmt(area(LAWN)-area(HOUSE)-area(DECK_EDGE)-21)} m² bez domu a terasy`, src:'Letecký snímek', k:'photo'},
   {name:'Záhony', d:`cca ${fmt(bedArea)} m²: trávy, astry, keře, kameny, 2 vyvýšené záhony u severní hranice`, src:'Snímek a fotky, rostliny orientačně', k:'est'},
   {name:'Návrh: rozšíření záhonu', d:`2 záhony 12 a 6 m × 1 m podél západního plotu, ${PLAN_BEDS.reduce((s,b)=>s+b.back.length+b.front.length,0)} trvalek z osazovacího plánu (10 druhů)`, src:'Osazovací plán, poloha odhadem', k:'est'},
-  {name:'Návrh: cesta za domem', d:'nášlapné betonové desky 1,0 × 0,4 m, trvalky v mulči, štěrkový pruh u zdi, vyvýšené záhony u plotu', src:'Inspirace, rozměry odhadem', k:'est'},
+  {name:'Návrh: za domem a za garáží', d:`místo trávníku trvalky v mulči a nášlapné desky 1,0 × 0,4 m (${SLABS.length} ks) až k oblázkovému kruhu s ohništěm; domek, dřevník, posezení a vyvýšené záhony zůstávají`, src:'Fotky skutečnosti, návrh odhadem', k:'est'},
   {name:'Oplocení', d:'zeď z betonových tvárnic a pole z dřevěných lamel, cca 1,6 m od chodníku', src:'Fotky, výška odhadem', k:'est'}
 ];
 const listEl = document.getElementById('list');
@@ -316,7 +368,7 @@ function build(renderer){
     alu:M('#c8ccd0',{roughness:.35,metalness:.6}), wood:M('#a8784b',{roughness:.8}), woodDark:M('#7a5a3c'),
     cobble:M('#ffffff',{map:T.cobble}), field:M('#ffffff',{map:T.field}), neigh:M('#6a8848'),
     mesh:M('#2f3b33',{transparent:true,opacity:.28,side:THREE.DoubleSide,depthWrite:false}), post:M('#2f3b33'),
-    pot:M('#3f4246'), cabinet:M('#ecebe6'), trunk:M('#5e4430')
+    pot:M('#3f4246'), cabinet:M('#ecebe6'), trunk:M('#5e4430'), galv:M('#a9adb0',{roughness:.45,metalness:.6}), slat:M('#b8925e',{roughness:.8})
   };
 
   Object.entries(MAT).forEach(([k,m])=>{m.name=k;});   // names carry over to the glTF export (tools/blender)
@@ -553,9 +605,18 @@ function build(renderer){
 
   // ----- Design layer: new beds, gravel, stepping stones, perennials -----
   DESIGN_BEDS.forEach(b=>flat(G.design,b,0.02,MAT.soil));
-  flat(G.design,GRAVEL,0.025,M('#d9d7d0',{name:'gravel'}));
-  for(let x=PATH.x0;x<PATH.x1;x+=PATH.along+PATH.gap)
-    box(G.design,x,x+PATH.along,0,0.06,PATH.z-PATH.across/2,PATH.z+PATH.across/2,M('#b9bab6',{name:'slab'}));
+  const pebbles=M('#d9d7d0',{name:'gravel'});
+  GRAVEL.forEach(g=>flat(G.design,g,0.025,pebbles));
+  { const c=new THREE.Mesh(new THREE.CircleGeometry(FIRE.r,40),pebbles); c.rotation.x=-Math.PI/2; c.position.set(FIRE.x,0.03,FIRE.z); c.receiveShadow=true; G.design.add(c); }
+  const slabMat=M('#b9bab6',{name:'slab'});
+  SLABS.forEach(p=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(PATH.along,0.06,PATH.across),slabMat); m.position.set(p.x,0.03,p.z); m.rotation.y=-p.ang; G.design.add(shadow(m)); });
+  FURNITURE.forEach(f=>{
+    if(f.type==='playhouse'){ box(G.design,f.x-f.w/2,f.x+f.w/2,0,f.h-0.35,f.z-f.d/2,f.z+f.d/2,M('#c9c7bd')); box(G.design,f.x-f.w/2-0.1,f.x+f.w/2+0.1,f.h-0.35,f.h-0.25,f.z-f.d/2-0.15,f.z+f.d/2+0.15,M('#5d6b7a')); }
+    if(f.type==='woodshed'){ box(G.design,f.x-f.w/2,f.x+f.w/2,0,f.h-0.1,f.z-f.d/2,f.z+f.d/2,M('#b98a5e')); box(G.design,f.x-f.w/2-0.05,f.x+f.w/2+0.1,f.h-0.1,f.h,f.z-f.d/2-0.05,f.z+f.d/2+0.05,M('#4b4f54')); }
+    if(f.type==='firebowl'){ const b=new THREE.Mesh(new THREE.CylinderGeometry(f.r,f.r*0.5,0.3,24),M('#8a4a24')); b.position.set(f.x,0.3,f.z); G.design.add(shadow(b)); }
+    if(f.type==='chair'){ box(G.design,f.x-0.3,f.x+0.3,0.35,0.42,f.z-0.3,f.z+0.3,M('#2a2c2e')); }
+    if(f.type==='table'){ const t=new THREE.Mesh(new THREE.CylinderGeometry(f.r,f.r,0.45,20),M('#2a2c2e')); t.position.set(f.x,0.23,f.z); G.design.add(shadow(t)); }
+  });
   {
     const geo=new THREE.SphereGeometry(1,10,8), im=new THREE.InstancedMesh(geo,M('#ffffff'),DESIGN_PLANTS.length);
     DESIGN_PLANTS.forEach((p,i)=>{
@@ -586,9 +647,16 @@ function build(renderer){
   function slatWall(a,b){
     const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
     along(G.fence,a,b,H.street,-0.5,0.3,new THREE.MeshStandardMaterial({map:blockTex(len,0.4),roughness:.9,name:'block'}));
-    for(let y=-0.45;y<H.wallTop-0.05;y+=0.15) along(G.fence,a,b,y,y+0.12,0.035,MAT.wood,0.05);
+    for(let y=-0.45;y<H.wallTop-0.05;y+=0.15) along(G.fence,a,b,y,y+0.12,0.035,MAT.slat,0.05);
     const n=Math.max(1,Math.round(len/2));
-    for(let i=0;i<=n;i++){const p=lerp2(a,b,i/n); box(G.fence,p[0]-0.05,p[0]+0.05,-0.5,H.wallTop,p[1]-0.05,p[1]+0.05,MAT.woodDark);}
+    for(let i=0;i<=n;i++){const p=lerp2(a,b,i/n); box(G.fence,p[0]-0.05,p[0]+0.05,-0.5,H.wallTop,p[1]-0.05,p[1]+0.05,MAT.galv);}
+  }
+  function tallSlat(a,b){
+    const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    along(G.fence,a,b,H.street,0.45,0.3,new THREE.MeshStandardMaterial({map:blockTex(len,0.45-H.street),roughness:.9,name:'block'}));
+    for(let y=0.5;y<1.75;y+=0.15) along(G.fence,a,b,y,y+0.12,0.035,MAT.slat,0.02);
+    const n=Math.max(1,Math.round(len/2));
+    for(let i=0;i<=n;i++){const p=lerp2(a,b,i/n); box(G.fence,p[0]-0.04,p[0]+0.04,0.45,1.8,p[1]-0.04,p[1]+0.04,MAT.galv);}
   }
   function meshFence(a,b){
     const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
@@ -599,9 +667,9 @@ function build(renderer){
   // Each edge: list of [from, to, kind] fractions along the edge
   const EDGES = [
     [0,1,[[0,1,'mesh']]],
-    [1,2,[[0,1,'block']]],
-    [2,3,[[0,.5,'block'],[.5,1,'slat']]],
-    [3,4,[[0,.25,'slat'],[.25,1,'block']]],
+    [1,2,[[0,1,'tall']]],
+    [2,3,[[0,1,'tall']]],
+    [3,4,[[0,.25,'tall'],[.25,1,'block']]],
     [4,5,[[0,1,'block']]],
     [5,6,[[0,1,'block']]],
     [9,10,[[0,.3,'block'],[.3,.62,'slat'],[.62,1,'block']]],
@@ -611,7 +679,7 @@ function build(renderer){
   ];
   EDGES.forEach(([i,j,parts])=>parts.forEach(([f0,f1,k])=>{
     const a=lerp2(P[i],P[j],f0), b=lerp2(P[i],P[j],f1);
-    ({block:blockWall,slat:slatWall,mesh:meshFence})[k](a,b);
+    ({block:blockWall,slat:slatWall,mesh:meshFence,tall:tallSlat})[k](a,b);
   }));
   // Gate pillars either side of the driveway
   [[24.9,31.07],[18.4,31.07]].forEach(([x,z])=>box(G.fence,x-0.22,x+0.22,H.street,H.wallTop+0.2,z-0.22,z+0.22,new THREE.MeshStandardMaterial({map:blockTex(0.44,1.8),roughness:.9,name:'block'})));

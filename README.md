@@ -78,7 +78,7 @@ ssh dell 'cd ~/Projects/gardenvisu/tools/blender && ~/Applications/blender/blend
 scp 'dell:Projects/gardenvisu/tools/blender/out/view-*.png' ../blender/out/
 ```
 
-Volby: `--views bird,street,terrace,top,west-bed,north-path,pool`, `--samples`, `--res 1600x900`, `--cpu`, `--no-render`. Soubor `out/garden.blend` jde otevřít v Blenderu na Dellu a dál upravovat ručně. Co scéna obsahuje navíc proti webu: zastřešení bazénu podle fotky (4 nízké teleskopické segmenty), šedou WPC terasu s hnědým okrajem, zeď z tmavých tvárnic (procedurálně), ulici s asfaltem, chodníky a obrubníky, domy naproti a řadu stromů na obzoru, 10 druhů trvalek z osazovacího plánu a jahody ve vyvýšených záhonech. Kromě 4 pohledů z webu jsou v Blenderu ještě 3 pohledy z výšky očí na návrh (`west-bed`, `north-path`, `pool`).
+Volby: `--views bird,street,terrace,top,west-bed,north-path,yard,pool`, `--samples`, `--res 1600x900`, `--cpu`, `--no-render`. Soubor `out/garden.blend` jde otevřít v Blenderu na Dellu a dál upravovat ručně. Co scéna obsahuje navíc proti webu: zastřešení bazénu podle fotky (4 nízké teleskopické segmenty), šedou WPC terasu s hnědým okrajem, zeď z tmavých tvárnic (procedurálně), ulici s asfaltem, chodníky a obrubníky, domy naproti a řadu stromů na obzoru, 10 druhů trvalek z osazovacího plánu a jahody ve vyvýšených záhonech. Kromě 4 pohledů z webu jsou v Blenderu ještě 3 pohledy z výšky očí na návrh (`west-bed`, `north-path`, `pool`).
 
 Textury a obloha jsou v `tools/blender/assets/` (nejsou v gitu, stahují se z Poly Haven API: `assets/<id>/{diff,nor,rough}.jpg`, `assets/hdri/sky.hdr` = kloofendal_48d_partly_cloudy_puresky). Další textury: asphalt_02, concrete_pavement, concrete_floor_02, clean_pebbles, weathered_planks. Modely v `assets/models/<id>/`: tree_small_02 (listnaté stromy, podzimní varianta přebarvením), boulder_01 a rock_07. Keře shrub_01–04 z Poly Haven jsou řídké africké keříky, do zahrady se nehodí, proto jsou keře a trvalky generované kódem.
 
@@ -116,7 +116,9 @@ Rendery z Blenderu jsou statické snímky. Jak model procházet, od nejjednoduš
 Vrstva **Návrh** ve webu a stejná data v Blenderu (konstanty `SPECIES`, `PLAN_BEDS`, `NORTH_BED`, `GRAVEL`, `PATH` v `index.html`):
 
 - **Rozšíření záhonu podle osazovacího plánu** (`podklady/navrh/`, jen lokálně): 2 záhony 12 a 6 m × 1 m, dvě řady po 0,5 m, 10 druhů trvalek. **Poloha je odhad:** před keři u západního plotu, 12m záhon od rohu domu na jih, 6m hned za ním, první rostlina řady je na severním konci. Posun = změnit `x0`, `z0` v `PLAN_BEDS`.
-- **Cesta za domem** podle inspirační fotky: nášlapné betonové desky 1,0 × 0,4 m, trvalky v mulči, pruh bílého štěrku u severní zdi, vyvýšené záhony s jahodami u plotu. Rozměry jsou odhad.
+- **Za domem a za garáží** (fotky 10–20 v `podklady/fotky/realita/`, popis v `POPIS.md` tamtéž): kde je teď hlína, nebude trávník. Návrh: trvalky z osazovacího plánu v mulči, nášlapné betonové desky 1,0 × 0,4 m podél domu a za roh až k oblázkovému kruhu s korten ohništěm. Stávající věci zůstávají: vyvýšené záhony s jahodami, dětský domek, dřevník, posezení u garáže, pás dochanů a hortenzií, oblázkové pruhy u zdí.
+
+Model je doladěný podle fotek skutečnosti: taškovou střechou, hnědou WPC terasou, antracitovými profily zastřešení bazénu, dlážděnou ulicí, plotem z tvárnic a latí na východě, pletivem na severu a západě, hustšími záhony, stromy v západním záhonu a západním sousedem. Kamera `yard` ukazuje dvorek za garáží.
 
 ## Další kroky
 

@@ -24,7 +24,8 @@ def arg(name, default=None):
 # Extra eye-level views of the design (Three.js coordinates, like D['VIEWS'])
 D['VIEWS'] += [
     {'key': 'west-bed',   'pos': [-1.2, 1.65, 19.0], 'tgt': [-3.6, 0.5, 4.0]},     # along the new bed by the west fence
-    {'key': 'north-path', 'pos': [-3.1, 1.65, -1.4], 'tgt': [9.0, 0.2, -1.6]},     # along the stepping stones behind the house
+    {'key': 'north-path', 'pos': [-3.0, 1.65, -1.85], 'tgt': [9.0, 0.2, -1.95]},   # along the stepping stones behind the house
+    {'key': 'yard',       'pos': [14.4, 1.65, -1.0], 'tgt': [21.0, 0.3, 1.4]},     # the yard behind the garage, fire bowl, play house     # along the stepping stones behind the house
     {'key': 'pool',       'pos': [9.6, 1.6, 18.8],   'tgt': [3.0, 0.3, 13.6]},     # the deck and pool enclosure from the lawn
 ]
 VIEWS = arg('--views', ','.join(v['key'] for v in D['VIEWS'])).split(',')
@@ -276,6 +277,45 @@ def far_lawn_mat(name):
     link(nt, n2.outputs['Fac'], bp.inputs['Height']); link(nt, bp.outputs['Normal'], bsdf.inputs['Normal'])
     return m
 
+def roof_tiles(name):
+    """Flat anthracite concrete roof tiles, about 0,30 × 0,33 m, laid in staggered courses (photos 02, 07)."""
+    m, nt, bsdf = new_mat(name)
+    tc = nt.nodes.new('ShaderNodeTexCoord'); sep = nt.nodes.new('ShaderNodeSeparateXYZ'); link(nt, tc.outputs['Object'], sep.inputs[0])
+    cmb = nt.nodes.new('ShaderNodeCombineXYZ'); link(nt, sep.outputs['X'], cmb.inputs['X']); link(nt, sep.outputs['Y'], cmb.inputs['Y'])
+    br = nt.nodes.new('ShaderNodeTexBrick')
+    br.inputs['Scale'].default_value = 1.0; br.inputs['Brick Width'].default_value = 0.30; br.inputs['Row Height'].default_value = 0.33
+    br.inputs['Mortar Size'].default_value = 0.004; br.inputs['Mortar Smooth'].default_value = 0.2
+    br.inputs['Color1'].default_value = lin('#2b2d30'); br.inputs['Color2'].default_value = lin('#25272a'); br.inputs['Mortar'].default_value = lin('#121314')
+    link(nt, cmb.outputs[0], br.inputs['Vector'])
+    link(nt, br.outputs['Color'], bsdf.inputs['Base Color'])
+    bsdf.inputs['Roughness'].default_value = 0.75; bsdf.inputs['Specular IOR Level'].default_value = 0.25
+    row = nt.nodes.new('ShaderNodeMath'); row.operation = 'WRAP'; row.inputs[1].default_value = 0.0; row.inputs[2].default_value = 0.33
+    link(nt, sep.outputs['Y'], row.inputs[0])
+    h = nt.nodes.new('ShaderNodeMath'); h.operation = 'SUBTRACT'; link(nt, row.outputs[0], h.inputs[0]); link(nt, br.outputs['Fac'], h.inputs[1])
+    bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.5; bp.inputs['Distance'].default_value = 0.05
+    link(nt, h.outputs[0], bp.inputs['Height']); link(nt, bp.outputs['Normal'], bsdf.inputs['Normal'])
+    return m
+
+def street_pavers(name):
+    """Interlocking street pavers, about 0,20 × 0,16 m, randomly yellow-beige and grey (photo 07)."""
+    m, nt, bsdf = new_mat(name)
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    br = nt.nodes.new('ShaderNodeTexBrick')
+    br.inputs['Scale'].default_value = 1.0; br.inputs['Brick Width'].default_value = 0.2; br.inputs['Row Height'].default_value = 0.16
+    br.inputs['Mortar Size'].default_value = 0.006; br.inputs['Mortar Smooth'].default_value = 0.5; br.inputs['Bias'].default_value = 0.0
+    br.inputs['Color1'].default_value = lin('#c9b27a'); br.inputs['Color2'].default_value = lin('#9b9a96'); br.inputs['Mortar'].default_value = lin('#6d6a63')
+    link(nt, tc.outputs['Object'], br.inputs['Vector'])
+    nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 30; nz.inputs['Detail'].default_value = 6
+    link(nt, tc.outputs['Object'], nz.inputs['Vector'])
+    sh = nt.nodes.new('ShaderNodeMapRange'); sh.inputs['To Min'].default_value = 0.8; sh.inputs['To Max'].default_value = 1.1
+    link(nt, nz.outputs['Fac'], sh.inputs['Value'])
+    col = mix_rgb(nt, 'MULTIPLY', br.outputs['Color'], (1, 1, 1, 1))
+    link(nt, sh.outputs['Result'], [s for s in col.node.inputs if s.type == 'RGBA'][1])
+    link(nt, col, bsdf.inputs['Base Color']); bsdf.inputs['Roughness'].default_value = 0.85
+    bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.6; bp.inputs['Distance'].default_value = 0.01
+    link(nt, br.outputs['Fac'], bp.inputs['Height']); link(nt, bp.outputs['Normal'], bsdf.inputs['Normal'])
+    return m
+
 def asset_size(asset, default):
     """Real-world texture size in metres from Poly Haven's info.json, if it was downloaded."""
     try: return json.load(open(os.path.join(ASSETS, asset, 'info.json')))['dimensions'][0] / 1000
@@ -286,28 +326,29 @@ def has(asset): return os.path.exists(os.path.join(ASSETS, asset, 'diff.jpg'))
 GLASS = flat_mat('glass_pbr', '#0d1216', rough=0.02, **{'Specular IOR Level': 0.6})
 MATS = {
     'wall':     tex_mat('plaster', 'painted_plaster_wall', 2.0, tint='#f6f4ee', rough=1.0, bump=0.08),
-    'roof':     standing_seam('roof_pbr', '#2e3236'),
+    'roof':     roof_tiles('roof_tiles'),
     'frame':    flat_mat('frame_pbr', '#383e42', rough=0.35, metallic=0.3),
     'glass':    GLASS,
     'door':     flat_mat('door_pbr', '#4a5056', rough=0.4, metallic=0.4),
     'groove':   flat_mat('groove_pbr', '#3d4247', rough=0.5, metallic=0.2),
     'sill':     flat_mat('sill_pbr', '#8f9396', rough=0.4, metallic=0.6),
     'pv':       flat_mat('pv_pbr', '#0b1424', rough=0.08, metallic=0.2),
-    'lawn':     tex_mat('lawn_ground', 'sparse_grass', 2.0, tint='#9ab27a', rough=1.0, bump=0.2, detile=True),
+    'lawn':     tex_mat('lawn_ground', 'sparse_grass', 2.0, tint='#7fa860', rough=1.0, bump=0.2, sat=1.3, detile=True),
     'soil':     tex_mat('mulch', 'aerial_wood_snips', 3.0, tint='#8a6f58', rough=1.0, bump=0.5, detile=True),
     'pave':     tex_mat('paving', 'rectangular_paving', 2.0, tint='#e2ddd2', rough=1.0, bump=0.25),
     'stone':    tex_mat('stone_paving', 'precast_stone_paving', 2.24, rough=1.0, bump=0.25),
-    'deck':     tex_mat('decking_wpc_grey', 'wood_floor_deck', 1.8, tint='#b4b2ae', rough=1.0, bump=0.2, sat=0.0),
-    'edge':     tex_mat('decking_wpc_brown', 'wood_floor_deck', 1.8, tint='#c87b5c', rough=1.0, bump=0.2, sat=0.55, rot=math.pi / 2),
+    'deck':     tex_mat('decking_wpc_brown', 'wood_floor_deck', 1.8, tint='#b48170', rough=0.8, bump=0.15, sat=0.4),
+    'edge':     tex_mat('decking_wpc_border', 'wood_floor_deck', 1.8, tint='#b48170', rough=0.8, bump=0.15, sat=0.4, rot=math.pi / 2),
     'water':    water_mat(),
     'cover':    flat_mat('polycarbonate', '#e8f4f7', rough=0.08, **{'Transmission Weight': 0.95}),
     'alu':      flat_mat('alu_pbr', '#c8ccd0', rough=0.3, metallic=1.0),
     'wood':     (tex_mat('planter_wood', 'weathered_planks', asset_size('weathered_planks', 2.0), tint='#d9d6cf', rough=1.0, bump=0.3, sat=0.3)
                  if has('weathered_planks') else tex_mat('wood_light', 'wood_floor_deck', 1.8, tint='#d8b08a', rough=1.0, bump=0.15)),
     'woodDark': tex_mat('wood_dark', 'wood_floor_deck', 1.8, tint='#7a5a3c', rough=1.0, bump=0.15),
+    'slat':     tex_mat('fence_slat', 'wood_floor_deck', 1.8, tint='#f2c792', rough=0.9, bump=0.15, sat=0.7),
+    'galv':     flat_mat('galvanised', '#a9adb0', rough=0.35, metallic=0.85),
     'block':    block_mat(),
-    'cobble':   (tex_mat('asphalt', 'asphalt_02', asset_size('asphalt_02', 3.0), rough=1.0, bump=0.3, detile=True) if has('asphalt_02')
-                 else tex_mat('cobble', 'cobblestone_floor_03', 2.4, rough=1.0, bump=0.4)),
+    'cobble':   street_pavers('street_pavers'),
     'field':    tex_mat('field', 'leafy_grass', 4.0, tint='#b5b98a', rough=1.0, bump=0.3, sat=0.7, detile=True),
     'neigh':    far_lawn_mat('neighbour_lawn'),
     'mesh':     wire_mesh_mat(),
@@ -551,19 +592,21 @@ def conifer(t, seed):
     b.add(*leaves(C, N, rng.uniform(0.08, 0.11, len(C)), 0.035, rng, cup=0.05), 1)
     return b.obj(f'conifer_{seed}', [BARK, leaf_mat(f'needles_{seed}', t['c'], val_var=0.15, transl=0.15)], plant_coll)
 
-AUTUMN = recolour(TREE_M, 'tree_autumn', hue=0.38, sat=1.3, val=1.15) if TREE_M else None
+AUTUMN = recolour(TREE_M, 'tree_autumn', hue=0.32, sat=1.3, val=1.15) if TREE_M else None
+PURPLE = recolour(TREE_M, 'tree_purple', hue=0.05, sat=0.8, val=0.5) if TREE_M else None
 for i, t in enumerate(D['TREES']):
     x, y = b2((t['x'], t['z']))
     if t['kind'] == 'conifer':
         conifer(t, 100 + i)
-    elif t['x'] < -4:     # the "trees" in the west border are large shrubs
+    elif t['x'] < -4 and t['h'] < 3.5:     # the low "trees" in the west border are large shrubs
         sy = t['h'] / (1.9 * t['r'])
         big = proto_shrub(200 + i, LEAF['green'], sy, n=int(5200 * t['r'] ** 1.6), leaf=1 / t['r'])
         big.hide_render = True; big.hide_viewport = True
         place(big, x, y, 0.0, t['r'], i)
     elif TREE_M:
-        red = int(t['c'][1:3], 16) > int(t['c'][3:5], 16)
-        instance(AUTUMN if red else TREE_M, x, y, 0.0, height=t['h'], rot=i * 1.7)
+        r_, g_, b_ = (int(t['c'][k:k + 2], 16) for k in (1, 3, 5))
+        model = PURPLE if (r_ > g_ and b_ > g_) else AUTUMN if r_ > g_ else TREE_M
+        instance(model, x, y, 0.0, height=t['h'], rot=i * 1.7)
 
 # ---------------------------------------------------------------- perennials from the planting plan (real size in metres)
 SP = {int(k): v for k, v in D.get('SPECIES', {}).items()}
@@ -652,6 +695,15 @@ def proto_species(i, seed):
             up = pts[-1] - pts[-2]
             b.add(*discs(np.array([pts[-1]]), np.array([up]), 0.019, rng, 12), 1)
             b.add(*discs(np.array([pts[-1] + unit(up) * 0.004]), np.array([up]), 0.009, rng, 8), 1)
+    elif kind == 'hydrangea':    # Hydrangea paniculata: leafy dome with cone-shaped panicles fading to pink
+        leaf_mound(b, rng, 1500, R, h * 0.85, 0.11, 0.065)
+        F, fd = shell_points(rng, 26, 0.9, np.array([R, R, h * 0.43]), np.array([0, 0, h * 0.43]))
+        for c, dvec in zip(F[F[:, 2] > h * 0.35], fd[F[:, 2] > h * 0.35]):
+            up = unit(dvec + [0, 0, 1.6]); n = 60; t = rng.uniform(0, 1, n) ** 0.7
+            ang = rng.uniform(0, 2 * np.pi, n); rad = 0.07 * (1 - t)
+            s1 = unit(np.cross(up, [0.3, 0.2, 1.0])); s2 = np.cross(up, s1)
+            P = c + up[None] * (t[:, None] * 0.22) + (np.cos(ang)[:, None] * s1 + np.sin(ang)[:, None] * s2) * rad[:, None]
+            b.add(*discs(P, P - c + up * 0.05, rng.uniform(0.01, 0.014, n), rng, 5), 1)
     o = b.obj(f'sp{i}_{seed}', sp_mats(i), proto_coll); o.hide_render = True; o.hide_viewport = True
     return o
 
@@ -665,32 +717,111 @@ def proto_strawberry(seed):
                                      flat_mat('strawberry_fruit', '#b8261f', rough=0.25)], proto_coll)
     o.hide_render = True; o.hide_viewport = True; return o
 
-# ---------------------------------------------------------------- design layer: new beds, gravel strip, stepping stones
+# ---------------------------------------------------------------- design layer: beds, pebble strips, stepping stones, things in the yard
 def poly_obj(name, pts, z, mat):
     return mesh_obj(name, [(*b2(p), z) for p in reversed(pts)], [list(range(len(pts)))], [mat], smooth=False)
+
+def rbox(name, cx, cy, z0, sx, sy, sz, rot, mat, bevel=0.0):
+    """Box centred on (cx, cy) in plan, from z0 up, rotated about Z."""
+    bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1.0)
+    if bevel: bmesh.ops.bevel(bm, geom=list(bm.edges), offset=bevel, segments=2, affect='EDGES')
+    o = mesh_obj(name, [], [], [mat]); bm.to_mesh(o.data); bm.free()
+    o.location = (cx, cy, z0 + sz / 2); o.scale = (sx, sy, sz); o.rotation_euler = (0, 0, rot); return o
+
+def corten_mat():
+    m, nt, bsdf = new_mat('corten')
+    nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 9; nz.inputs['Detail'].default_value = 8
+    ramp = nt.nodes.new('ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].color = lin('#5a2c16'); ramp.color_ramp.elements[1].color = lin('#a3562a')
+    link(nt, nz.outputs['Fac'], ramp.inputs['Fac']); link(nt, ramp.outputs['Color'], bsdf.inputs['Base Color'])
+    bsdf.inputs['Roughness'].default_value = 0.8
+    bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.3
+    link(nt, nz.outputs['Fac'], bp.inputs['Height']); link(nt, bp.outputs['Normal'], bsdf.inputs['Normal'])
+    return m
+
+def furniture(f):
+    x, y = b2((f['x'], f['z'])); rot = f.get('rot', 0.0); t = f['type']
+    if t == 'playhouse':     # grey-painted timber play house with a blue-grey metal roof (photo 11)
+        w, d, h = f['w'], f['d'], f['h']; wall_h = h - 0.4
+        paint = tex_mat('playhouse_paint', 'weathered_planks', 2.0, tint='#d8d6cc', rough=1.0, bump=0.3, sat=0.1) if has('weathered_planks') else flat_mat('playhouse_paint', '#c9c7bd')
+        rbox('playhouse', x, y, 0.0, w, d, wall_h, rot, paint)
+        rbox('playhouse_window', x, y - d / 2 - 0.005, 0.7, 0.6, 0.02, 0.4, rot, GLASS)
+        rbox('playhouse_door', x - w * 0.3, y - d / 2 - 0.005, 0.0, 0.5, 0.02, 1.05, rot, flat_mat('playhouse_door', '#b9b7ad', rough=0.8))
+        hw, hd = w / 2 + 0.12, d / 2 + 0.15
+        v = [(-hw, -hd, wall_h), (hw, -hd, wall_h), (hw, hd, wall_h), (-hw, hd, wall_h), (-hw, 0, h), (hw, 0, h)]
+        o = mesh_obj('playhouse_roof', v, [(0, 1, 5, 4), (2, 3, 4, 5)], [flat_mat('roof_bluegrey', '#5d6b7a', rough=0.45, metallic=0.5)], smooth=False)
+        o.location = (x, y, 0); o.rotation_euler = (0, 0, rot)
+        o.modifiers.new('t', 'SOLIDIFY').thickness = 0.03
+        gab = mesh_obj('playhouse_gables', [(-w / 2, -d / 2, wall_h), (w / 2, -d / 2, wall_h), (0, -d / 2, h - 0.03), (-w / 2, d / 2, wall_h), (w / 2, d / 2, wall_h), (0, d / 2, h - 0.03)],
+                       [(0, 1, 2), (5, 4, 3)], [paint], smooth=False)
+        gab.location = (x, y, 0); gab.rotation_euler = (0, 0, rot)
+    elif t == 'woodshed':    # timber lean-to against the east fence, full of split logs (photo 11)
+        w, d, h = f['w'], f['d'], f['h']; timber = MATS['woodDark']
+        for sy_ in (-1, 1):
+            for sx_ in (-1, 1):
+                rbox('woodshed_post', x + sx_ * (w / 2 - 0.05), y + sy_ * (d / 2 - 0.05), 0, 0.09, 0.09, h - 0.08, rot, timber)
+        rbox('woodshed_back', x + w / 2 - 0.02, y, 0, 0.03, d, h - 0.1, rot, timber)
+        rbox('woodshed_roof', x + 0.05, y, h - 0.1, w + 0.25, d + 0.2, 0.05, rot, flat_mat('woodshed_roof', '#3f4347', rough=0.5, metallic=0.4))
+        rbox('woodshed_stack', x + 0.05, y, 0.12, w - 0.2, d - 0.2, h - 0.35, rot, flat_mat('log_bark', '#5b4636', rough=0.95))
+        rng_ = np.random.default_rng(11); C, N, R = [], [], []
+        for zz in np.arange(0.18, h - 0.28, 0.13):
+            for yy in np.arange(-d / 2 + 0.18, d / 2 - 0.15, 0.14):
+                C.append([x - (w - 0.2) / 2 + 0.05 - 0.001, y + yy + rng_.uniform(-0.02, 0.02), zz + rng_.uniform(-0.02, 0.02)]); N.append([-1, 0, 0]); R.append(rng_.uniform(0.05, 0.075))
+        b = Builder(); b.add(*discs(np.array(C), np.array(N, float), np.array(R), rng_, 7)); b.obj('woodshed_log_ends', [flat_mat('end_grain', '#c9a27a', rough=0.9)])
+    elif t == 'firebowl':
+        r = f['r']; bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=16, radius=r)
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.z > 0.001], context='VERTS')
+        o = mesh_obj('fire_bowl', [], [], [corten_mat()]); bm.to_mesh(o.data); bm.free()
+        o.data.polygons.foreach_set('use_smooth', [True] * len(o.data.polygons))
+        o.modifiers.new('t', 'SOLIDIFY').thickness = 0.012
+        o.location = (x, y, 0.42); o.scale = (1, 1, 0.55)
+        b = Builder(); b.add(*tube([x, y, 0.03], [x, y, 0.2], r * 0.45, r * 0.3, 16)); b.obj('fire_bowl_stand', [o.data.materials[0]])
+    elif t in ('chair', 'table'):
+        black = flat_mat('powder_black', '#1f2123', rough=0.5, metallic=0.3); b = Builder()
+        if t == 'table':
+            r = f['r']; b.add(*discs(np.array([[x, y, 0.45]]), np.array([[0, 0, 1.0]]), r, np.random.default_rng(1), 24))
+            for a in range(3):
+                ang = a * 2 * math.pi / 3; b.add(*tube([x + math.cos(ang) * r * 0.8, y + math.sin(ang) * r * 0.8, 0], [x, y, 0.44], 0.01, 0.01, 5))
+        else:   # string lounge chair: tube frame, seat and back
+            c, s = math.cos(rot), math.sin(rot)
+            P = lambda u, v, z: [x + u * c - v * s, y + u * s + v * c, z]
+            for u in (-0.3, 0.3):
+                b.add(*tube(P(u, -0.3, 0), P(u, -0.3, 0.38), 0.012, 0.012, 5)); b.add(*tube(P(u, 0.3, 0), P(u, 0.2, 0.38), 0.012, 0.012, 5))
+                b.add(*tube(P(u, -0.3, 0.38), P(u, 0.3, 0.36), 0.012, 0.012, 5)); b.add(*tube(P(u, 0.3, 0.36), P(u, 0.42, 0.8), 0.012, 0.012, 5))
+            b.add(np.array([P(-0.3, -0.3, 0.37), P(0.3, -0.3, 0.37), P(0.3, 0.3, 0.35), P(-0.3, 0.3, 0.35)]), np.array([[0, 1, 2, 3]]))
+            b.add(np.array([P(-0.3, 0.3, 0.36), P(0.3, 0.3, 0.36), P(0.3, 0.42, 0.79), P(-0.3, 0.42, 0.79)]), np.array([[0, 1, 2, 3]]))
+        b.obj(t, [black])
 
 DESIGN = 'DESIGN_BEDS' in D
 if DESIGN:
     for k, bed in enumerate(D['DESIGN_BEDS']): poly_obj(f'design_bed_{k}', bed, 0.022, MATS['soil'])
     GRAVEL_M = (tex_mat('white_pebbles', 'clean_pebbles', asset_size('clean_pebbles', 1.0), rough=1.0, bump=0.6) if has('clean_pebbles')
                 else flat_mat('white_pebbles', '#d9d7d0', rough=0.8))
-    poly_obj('gravel_strip', D['GRAVEL'], 0.04, GRAVEL_M)
+    EDGE_M = flat_mat('concrete_edge', '#a7a59f', rough=0.8)
+    for k, g in enumerate(D['GRAVEL']):
+        poly_obj(f'pebbles_{k}', g, 0.04, GRAVEL_M)
+        b = Builder(); pts = [np.array([*b2(p), 0.0]) for p in g]
+        for a, c in zip(pts, pts[1:] + pts[:1]): b.add(*tube(a + [0, 0, 0.03], c + [0, 0, 0.03], 0.03, 0.03, 4))
+        b.obj(f'pebble_edge_{k}', [EDGE_M])
+    fr = D['FIRE']; fx, fy = b2((fr['x'], fr['z']))
+    ang = np.linspace(0, 2 * np.pi, 48, endpoint=False)
+    mesh_obj('fire_circle', [(fx + fr['r'] * math.cos(a), fy + fr['r'] * math.sin(a), 0.035) for a in ang], [list(range(48))], [GRAVEL_M], smooth=False)
+    b = Builder()
+    for a, c in zip(ang, np.roll(ang, -1)):
+        b.add(*tube([fx + fr['r'] * math.cos(a), fy + fr['r'] * math.sin(a), 0.03], [fx + fr['r'] * math.cos(c), fy + fr['r'] * math.sin(c), 0.03], 0.025, 0.025, 4))
+    b.obj('fire_circle_edge', [corten_mat()])
     SLAB_M = (tex_mat('concrete_slab', 'concrete_floor_02', asset_size('concrete_floor_02', 2.0), tint='#e4e2dc', rough=1.0, bump=0.1, sat=0.3)
               if has('concrete_floor_02') else flat_mat('concrete_slab', '#b9bab6', rough=0.7))
-    pa = D['PATH']; x = pa['x0']; k = 0
-    while x < pa['x1']:
-        y0, y1 = b2((x, pa['z'] - pa['across'] / 2))[1], b2((x, pa['z'] + pa['across'] / 2))[1]
-        bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1.0)
-        bmesh.ops.bevel(bm, geom=list(bm.edges), offset=0.006, segments=2, affect='EDGES')
-        o = mesh_obj(f'slab_{k}', [], [], [SLAB_M]); bm.to_mesh(o.data); bm.free()
-        o.location = (x + pa['along'] / 2, (y0 + y1) / 2, 0.03); o.scale = (pa['along'], abs(y1 - y0), 0.06)
-        x += pa['along'] + pa['gap']; k += 1
+    pa = D['PATH']
+    for k, sl in enumerate(D['SLABS']):
+        x, y = b2((sl['x'], sl['z'])); rbox(f'slab_{k}', x, y, 0.0, pa['along'], pa['across'], 0.06, -sl['ang'], SLAB_M, bevel=0.006)
+    for f in D['FURNITURE']: furniture(f)
     SP_PROTOS = {i: [proto_species(i, 300 + i * 10 + v) for v in range(2)] for i in SP}
     rs = np.random.default_rng(5)
     for n, p in enumerate(D['DESIGN_PLANTS']):
         x, y = b2((p['x'], p['z']))
         place(SP_PROTOS[p['sp']][n % 2], x, y, 0.022, rs.uniform(0.85, 1.15), p['rot'])
-    print(f"design: {len(D['DESIGN_PLANTS'])} perennials, {k} stepping stones")
+    print(f"design: {len(D['DESIGN_PLANTS'])} plants, {len(D['SLABS'])} stepping stones")
 
 # Raised planters: strawberries instead of the lettuce spheres
 STRAW = [proto_strawberry(s) for s in (31, 32)]
@@ -723,17 +854,17 @@ def lawn_blade_mat():
     tc = nt.nodes.new('ShaderNodeNewGeometry'); nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 0.35
     link(nt, tc.outputs['Position'], nz.inputs['Vector'])
     ramp = nt.nodes.new('ShaderNodeValToRGB')
-    ramp.color_ramp.elements[0].color = lin('#3e6b26'); ramp.color_ramp.elements[1].color = lin('#7a9442')
+    ramp.color_ramp.elements[0].color = lin('#4a8a28'); ramp.color_ramp.elements[1].color = lin('#7fae3c')   # lush, freshly mown (photos 03, 04)
     ramp.color_ramp.elements[0].position = 0.35; ramp.color_ramp.elements[1].position = 0.7
     link(nt, nz.outputs['Fac'], ramp.inputs['Fac']); link(nt, ramp.outputs['Color'], hs.inputs['Color'])
     return m
 
 LAWN_P = poly('LAWN')
 blocked = [poly(k) for k in ('DRIVE', 'RAMP', 'PATIO', 'DECK_EDGE', 'HOUSE', 'GARAGE')]
-blocked += [np.array([b2(p) for p in bed]) for bed in D.get('DESIGN_BEDS', []) + ([D['GRAVEL']] if 'GRAVEL' in D else [])]
+blocked += [np.array([b2(p) for p in bed]) for bed in D.get('DESIGN_BEDS', []) + D.get('GRAVEL', [])]
 rng = np.random.default_rng(7)
 xmin, ymin = LAWN_P.min(0); xmax, ymax = LAWN_P.max(0)
-DENSITY = 110      # patches per m²
+DENSITY = 170      # patches per m²
 n = int((xmax - xmin) * (ymax - ymin) * DENSITY)
 X = rng.uniform(xmin, xmax, n); Y = rng.uniform(ymin, ymax, n)
 ok = in_poly(X, Y, LAWN_P)
@@ -791,7 +922,7 @@ for o in objs_with('alu'):
     if px0 - 0.4 < min(c.x for c in bb) and max(c.x for c in bb) < px1 + 0.4 and py0 - 0.6 < min(c.y for c in bb) and max(c.y for c in bb) < py1 + 0.6 and max(c.z for c in bb) < 0.9:
         o.hide_render = True; o.hide_viewport = True
 PANEL = clear_panel_mat()
-ALU = flat_mat('anodised_alu', '#c9ccce', rough=0.25, metallic=1.0)
+ALU = flat_mat('anthracite_alu', '#3a3e43', rough=0.35, metallic=0.6)   # profiles are anthracite (photo 05)
 yc = (py0 + py1) / 2; DECK_TOP = 0.15
 def profile(half, h, k=28, p=4.0):
     t = np.linspace(-np.pi / 2, np.pi / 2, k)
@@ -830,8 +961,7 @@ def strip(name, w0, w1, z0, mat, z1=None):
     v = [(*b2(p), z0) for p in A] + [(*b2(p), z1) for p in B]
     return mesh_obj(name, v, [(n + i, n + i + 1, i + 1, i) for i in range(n - 1)], [mat], smooth=False)
 ST = D['H']['street']
-SIDEWALK = (tex_mat('sidewalk', 'concrete_pavement', asset_size('concrete_pavement', 2.0), rough=1.0, bump=0.3) if has('concrete_pavement')
-            else MATS['pave'])
+SIDEWALK = MATS['cobble']   # the street and pavements are the same interlocking pavers (photo 07)
 KERB = flat_mat('kerb', '#a9a7a1', rough=0.8)
 VERGE = far_lawn_mat('verge')
 for side, (w0, w1) in (('near', (0.02, 2.0)), ('far', (8.6, 10.6))):
@@ -863,7 +993,7 @@ for (ax, az), (bx, bz) in zip(far[:-1], far[1:]):
         f = t / seg; x, y = b2((ax + (bx - ax) * f, az + (bz - az) * f))
         if abs(x - 11) > 60 or abs(y + 13) > 60: continue
         house(x, y, ang, seed=seed); seed += 1
-house(*b2((-24.0, 7.0)), 0.0, w=11, d=9, seed=99)      # neighbour to the west
+house(*b2((-13.5, 9.0)), 0.0, w=10, d=9, wall_h=3.0, ridge=2.6, seed=99)   # west neighbour, gable towards us (photo 17)
 if TREE_M:
     rng = np.random.default_rng(3)
     for x in np.arange(-70, 80, 5.5):                    # tree line beyond the field and the neighbours

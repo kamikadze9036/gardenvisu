@@ -34,7 +34,7 @@ const { glb, data } = await page.evaluate(() => new Promise(resolve => {
   const skip = [G.trees, G.grid, G.design];
   Object.values(G).forEach(g => { g.visible = !skip.includes(g); });
   const data = { PLANTS, TREES, VIEWS, H, P, LAWN, DRIVE, RAMP, PATIO, DECK, DECK_EDGE, POOL, HOUSE, GARAGE, PLANTERS,
-    SPECIES, PLAN_BEDS, NORTH_BED, GRAVEL, PATH, DESIGN_BEDS, DESIGN_PLANTS };
+    SPECIES, PLAN_BEDS, NORTH_BED, NE_YARD, FIRE, GRAVEL, PATH, SLABS, FURNITURE, DESIGN_BEDS, DESIGN_PLANTS };
   new THREE.GLTFExporter().parse(scene, buf => {
     const bytes = new Uint8Array(buf); let s = '';
     for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
