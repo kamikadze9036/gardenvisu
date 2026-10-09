@@ -343,8 +343,8 @@ MATS = {
     'soil':     tex_mat('mulch', 'aerial_wood_snips', 3.0, tint='#8a6f58', rough=1.0, bump=0.5, detile=True),
     'pave':     tex_mat('paving', 'rectangular_paving', 2.0, tint='#e2ddd2', rough=1.0, bump=0.25),
     'stone':    tex_mat('stone_paving', 'precast_stone_paving', 2.24, rough=1.0, bump=0.25),
-    'deck':     tex_mat('decking_wpc_brown', 'wood_floor_deck', 1.8, tint='#b48170', rough=0.8, bump=0.15, sat=0.4),
-    'edge':     tex_mat('decking_wpc_border', 'wood_floor_deck', 1.8, tint='#b48170', rough=0.8, bump=0.15, sat=0.4, rot=math.pi / 2),
+    'deck':     tex_mat('decking_wpc_brown', 'wood_floor_deck', 1.8, tint='#d29a90', rough=1.0, bump=0.15, sat=0.25),
+    'edge':     tex_mat('decking_wpc_border', 'wood_floor_deck', 1.8, tint='#d29a90', rough=1.0, bump=0.15, sat=0.25, rot=math.pi / 2),
     'water':    water_mat(),
     'cover':    flat_mat('polycarbonate', '#e8f4f7', rough=0.08, **{'Transmission Weight': 0.95}),
     'alu':      flat_mat('alu_pbr', '#c8ccd0', rough=0.3, metallic=1.0),
@@ -945,40 +945,79 @@ wv = mesh_obj('pool_water', [(x, y, POOL_FLOOR + 0.01) for x, y in c] + [(x, y, 
 for o in objs_with('water'):
     if o != wv: o.hide_render = True
 
-# ---------------------------------------------------------------- telescopic pool enclosure (photos 02, 05, 19)
-# Four low angular segments sliding over each other, milky clear panels, anthracite profiles and rails.
+# ---------------------------------------------------------------- telescopic pool enclosure (photos 21, 22)
+# Custom three-segment Mountfield enclosure: very low, side walls leaning slightly inwards, a shallow barrel-vault roof
+# with longitudinal profiles, frosted ribbed polycarbonate, anthracite frames, a dark rubber skirt and silver rails
+# running the whole length of the deck. Segments get smaller towards the east, where they slide when opened.
 for o in objs_with('cover'): o.hide_render = True; o.hide_viewport = True
 for o in objs_with('alu'):
     bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
     if px0 - 0.4 < min(c.x for c in bb) and max(c.x for c in bb) < px1 + 0.4 and py0 - 0.6 < min(c.y for c in bb) and max(c.y for c in bb) < py1 + 0.6 and max(c.z for c in bb) < 0.9:
         o.hide_render = True; o.hide_viewport = True
-PANEL = clear_panel_mat()
-ALU = flat_mat('anthracite_alu', '#3a3e43', rough=0.35, metallic=0.6)   # profiles are anthracite (photo 05)
+
+def polycarbonate(name, ribs, milk):
+    """Frosted polycarbonate: translucent, milky, with fine ribs across the given local axis."""
+    m, nt, bsdf = new_mat(name)
+    bsdf.inputs['Base Color'].default_value = lin('#e4ebea')
+    bsdf.inputs['Transmission Weight'].default_value = 0.55; bsdf.inputs['IOR'].default_value = 1.58
+    bsdf.inputs['Roughness'].default_value = milk
+    bsdf.inputs['Subsurface Weight'].default_value = 0.3
+    if ribs:
+        tc = nt.nodes.new('ShaderNodeTexCoord'); wv = nt.nodes.new('ShaderNodeTexWave')
+        wv.wave_type = 'BANDS'; wv.bands_direction = ribs; wv.inputs['Scale'].default_value = 60
+        link(nt, tc.outputs['Object'], wv.inputs['Vector'])
+        bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.35
+        link(nt, wv.outputs['Fac'], bp.inputs['Height']); link(nt, bp.outputs['Normal'], bsdf.inputs['Normal'])
+    return m
+
+SIDE_P = polycarbonate('polycarbonate_ribbed', 'Z', 0.4)
+TOP_P = polycarbonate('polycarbonate_roof', 'X', 0.3)
+ALU = flat_mat('anthracite_alu', '#45494e', rough=0.35, metallic=0.6)
+RUBBER = flat_mat('rubber_skirt', '#2c2e30', rough=0.8)
+RAIL = flat_mat('rail_alu', '#d5d7d8', rough=0.3, metallic=0.9)
 yc = (py0 + py1) / 2; DECK_TOP = 0.15
-def profile(half, h):
-    """Angular low enclosure (photos 02, 05, 19): short upright sides, a chamfer, flat top."""
-    side, cham = 0.16, 0.42
-    return np.array([[-half, 0.0], [-half, side], [-half + cham, h], [half - cham, h], [half, side], [half, 0.0]])
-for i in range(4):
-    half, h = 1.98 - i * 0.05, 0.52 - i * 0.035
-    xa = px0 - 0.1 + i * 1.62; xb = xa + 1.72
-    pr = profile(half, h); n = len(pr)
-    verts = [(xa, yc + y, DECK_TOP + z) for y, z in pr] + [(xb, yc + y, DECK_TOP + z) for y, z in pr]
-    faces = [(j, j + 1, n + j + 1, n + j) for j in range(n - 1)]
-    if i == 0: faces.append(tuple(range(n - 1, -1, -1)))            # closed end towards the house
-    if i == 3: faces.append(tuple(range(n, 2 * n)))
-    mesh_obj(f'cover_panel_{i}', verts, faces, [PANEL], smooth=False)
+
+def section(half, side, rise, k=18):
+    """Cross-section (y, z): side wall leaning in by 6 cm, then a shallow arch."""
+    inner = half - 0.06
+    ys = np.linspace(-inner, inner, k)
+    return [(-half, 0.0)] + [(y, side + rise * (1 - (y / inner) ** 2)) for y in ys] + [(half, 0.0)]
+
+SEGMENTS = 3
+seg_len = (px1 - px0 + 0.3) / SEGMENTS + 0.12
+for i in range(SEGMENTS):                   # i = 0 is the largest (west) segment
+    half, side, rise = 2.02 - i * 0.07, 0.36 - i * 0.05, 0.16 - i * 0.01
+    xa = px0 - 0.15 + i * (seg_len - 0.12); xb = xa + seg_len
+    pr = section(half, side, rise); n = len(pr)
+    V = [(xa, yc + y, DECK_TOP + z) for y, z in pr] + [(xb, yc + y, DECK_TOP + z) for y, z in pr]
+    walls = [(0, 1, n + 1, n), (n - 2, n - 1, 2 * n - 1, 2 * n - 2)]
+    roof = [(j, j + 1, n + j + 1, n + j) for j in range(1, n - 2)]
+    caps = []
+    if i == 0: caps.append(tuple(range(n - 1, -1, -1)))
+    if i == SEGMENTS - 1: caps.append(tuple(range(n, 2 * n)))
+    o = mesh_obj(f'cover_panels_{i}', V, walls + caps + roof, [SIDE_P, TOP_P], [0] * (len(walls) + len(caps)) + [1] * len(roof), smooth=True)
     b = Builder()
-    for xx in (xa, xb, (xa + xb) / 2):                                # arches at both ends and in the middle
+    for xx in (xa, xb):                                               # end arches
         for (y0_, z0_), (y1_, z1_) in zip(pr[:-1], pr[1:]):
-            b.add(*tube([xx, yc + y0_, DECK_TOP + z0_], [xx, yc + y1_, DECK_TOP + z1_], 0.025, 0.025, 4))
-    for y_, z_ in pr[1:-1]:                                            # profiles along every break of the shape
-        b.add(*tube([xa, yc + y_, DECK_TOP + z_], [xb, yc + y_, DECK_TOP + z_], 0.02, 0.02, 4))
+            b.add(*tube([xx, yc + y0_, DECK_TOP + z0_], [xx, yc + y1_, DECK_TOP + z1_], 0.03, 0.03, 4))
     for s_ in (-1, 1):
-        b.add(*tube([xa, yc + s_ * half, DECK_TOP + 0.03], [xb, yc + s_ * half, DECK_TOP + 0.03], 0.035, 0.035, 4))
+        ye, ze = pr[1] if s_ < 0 else pr[-2]
+        b.add(*tube([xa, yc + ye, DECK_TOP + ze], [xb, yc + ye, DECK_TOP + ze], 0.035, 0.035, 4))        # eave profile
+        b.add(*tube([xa, yc + s_ * half, DECK_TOP + 0.04], [xb, yc + s_ * half, DECK_TOP + 0.04], 0.035, 0.035, 4))   # sill
+        xm = (xa + xb) / 2                                              # post dividing the side into two panes
+        b.add(*tube([xm, yc + s_ * half, DECK_TOP + 0.04], [xm, yc + ye, DECK_TOP + ze], 0.018, 0.018, 4))
+    for f_ in (-1 / 3, 1 / 3):                                         # two longitudinal roof profiles
+        y_ = f_ * (half - 0.06); z_ = side + rise * (1 - (f_) ** 2)
+        b.add(*tube([xa, yc + y_, DECK_TOP + z_ + 0.01], [xb, yc + y_, DECK_TOP + z_ + 0.01], 0.022, 0.022, 4))
     b.obj(f'cover_frame_{i}', [ALU])
-for s in (-1, 1):   # running rails on the deck
-    b = Builder(); b.add(*tube([px0 - 0.15, yc + s * 2.0, DECK_TOP + 0.01], [px1 + 1.2, yc + s * 2.0, DECK_TOP + 0.01], 0.02, 0.02, 4)); b.obj('cover_rail', [ALU])
+    for s_ in (-1, 1):                                                 # rubber skirt along the bottom
+        b = Builder(); b.add(*tube([xa, yc + s_ * (half + 0.03), DECK_TOP + 0.02], [xb, yc + s_ * (half + 0.03), DECK_TOP + 0.02], 0.04, 0.04, 6)); b.obj('cover_skirt', [RUBBER])
+
+dx0, dx1 = -0.3, 11.3        # three silver rails per side along the whole deck (photo 22)
+for s_ in (-1, 1):
+    for k_ in range(3):
+        y_ = yc + s_ * (2.12 + k_ * 0.05)
+        rbox('cover_rail', (dx0 + dx1) / 2, y_, DECK_TOP, dx1 - dx0, 0.035, 0.022, 0, RAIL)
 
 # ---------------------------------------------------------------- bioclimatic pergola (photos 02, 19)
 # Free-standing anthracite frame on the deck in front of the living room: three posts at the front, a deep perimeter
