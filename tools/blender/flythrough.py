@@ -1,4 +1,4 @@
-# Camera flythrough: street → over the wall → pool → west bed → round the corner → along the path behind the house.
+# Camera flythrough: street → over the wall → pool → west bed → round the corner → path behind the house → yard.
 # Runs after build_scene.py in the same Blender process:
 #
 #   blender -b --factory-startup --python build_scene.py --python flythrough.py -- --no-render \
@@ -23,9 +23,10 @@ ROUTE = [
     ([6.0, 2.2, 21.0],  [3.0, 0.4, 12.5]),    # towards the pool
     ([-1.5, 1.8, 19.0], [-3.5, 0.5, 8.0]),    # turning to the new west bed
     ([-1.8, 1.7, 6.0],  [-3.0, 0.4, -2.0]),   # along the bed
-    ([-2.0, 1.7, -0.6], [4.0, 0.4, -1.5]),    # round the north-west corner
-    ([4.0, 1.65, -1.45], [12.0, 0.3, -1.5]),  # on the stepping stones
-    ([12.0, 1.65, -1.45], [20.0, 0.3, -1.6]),
+    ([-2.0, 1.7, -0.6], [4.0, 0.4, -1.8]),    # round the north-west corner
+    ([4.0, 1.65, -1.85], [12.0, 0.3, -1.9]),  # on the stepping stones behind the house
+    ([12.5, 1.65, -1.85], [18.5, 0.3, 0.2]),  # round the corner into the yard behind the garage
+    ([16.2, 1.65, -0.4], [20.6, 0.3, 1.6]),   # towards the fire bowl
 ]
 def b3(p): return np.array([p[0], -p[2], p[1]], float)
 P = np.array([b3(p) for p, _ in ROUTE]); T = np.array([b3(t) for _, t in ROUTE])
