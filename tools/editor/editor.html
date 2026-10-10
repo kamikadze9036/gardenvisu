@@ -126,7 +126,8 @@ dialog td.n{text-align:right}
     <button id="download" title="Stáhnout layout.json do počítače">Stáhnout</button>
     <button id="underlay" title="Vložit obrázek jako podklad">Podklad…</button>
     <button id="list">Seznam rostlin</button>
-    <button id="print">Tisk</button>
+    <button id="planPdf" title="Výkres A3 1 : 150 s legendou a počty rostlin; v okně tisku zvolte Uložit jako PDF">Půdorys PDF</button>
+    <button id="print" title="Vytisknout přesně to, co je vidět">Tisk</button>
     <button id="reset" title="Zahodit změny a načíst výchozí layout">Výchozí</button>
   </div>
   <input type="file" id="fileJson" accept=".json,application/json" class="hide">
@@ -160,6 +161,7 @@ dialog td.n{text-align:right}
 <dialog id="dlg"><div id="dlgBody"></div><p style="text-align:right;margin:12px 0 0"><button id="dlgCopy">Kopírovat CSV</button> <button onclick="this.closest('dialog').close()">Zavřít</button></p></dialog>
 
 <script src="layout.js"></script>
+<script src="plan.js"></script>
 <script>
 'use strict';
 // ---------- state ----------
@@ -651,7 +653,12 @@ document.getElementById('undo').onclick = undo; document.getElementById('redo').
 document.getElementById('save').onclick = () => save();
 document.getElementById('saveAs').onclick = () => { if (!server) return hint('Pojmenované verze fungují jen na serveru.'); const n = prompt('Název verze (např. „návrh A – víc trav“):'); if (n) save(false, n.trim()); }; document.getElementById('download').onclick = download; document.getElementById('open').onclick = () => document.getElementById('fileJson').click();
 document.getElementById('underlay').onclick = () => document.getElementById('fileImg').click();
-document.getElementById('list').onclick = plantList; document.getElementById('print').onclick = () => { sel.clear(); render(); fit(); setTimeout(print, 50); };
+document.getElementById('list').onclick = plantList;
+document.getElementById('planPdf').onclick = () => {
+  const w = window.open('', '_blank'); if (!w) return hint('Prohlížeč zablokoval nové okno, povolte ho.');
+  w.document.write(`<!doctype html><meta charset="utf-8"><title>Půdorys – ${(L.meta?.label || 'zahrada').replace(/</g, '')}</title><style>@page{size:420mm 297mm;margin:0}body{margin:0}svg{display:block;width:420mm;height:297mm}@media screen{body{background:#888}svg{margin:10px auto;background:#fff;max-width:calc(100vw - 20px);height:auto}}</style>${drawPlan(L)}<script>setTimeout(()=>print(),300)<\/script>`);
+  w.document.close();
+}; document.getElementById('print').onclick = () => { sel.clear(); render(); fit(); setTimeout(print, 50); };
 document.getElementById('reset').onclick = () => { if (!confirm('Zahodit všechny změny a načíst výchozí layout?')) return; commit(); L = structuredClone(window.DEFAULT_LAYOUT); sel.clear(); changed(); fit(); };
 document.getElementById('search').oninput = renderCatalog;
 new ResizeObserver(applyView).observe(svg);

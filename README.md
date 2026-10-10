@@ -1,5 +1,7 @@
 # gardenvisu
 
+**Nový chat nebo nový člověk: začněte v [STAV.md](STAV.md)** (co běží, kde co je, rozhodnutí, další kroky).
+
 Interaktivní 3D model rodinného domu a zahrady pro návrh nové zahrady. Model běží v prohlížeči (Three.js), nic se neinstaluje. Dům je postavený podle projektové dokumentace, zahrada podle leteckého snímku s měřítkem a fotek z ulice.
 
 **Otevření:** dvakrát klikněte na `index.html` (potřebuje internet kvůli knihovně Three.js z CDN). Tažením otáčíte, kolečkem nebo dvěma prsty přibližujete. Dole jsou pohledy (ptačí, z ulice, z terasy, shora) a vrstvy, které jdou vypnout. Mřížka 1 m pomáhá při kreslení nových záhonů.
@@ -19,7 +21,7 @@ Interaktivní 3D model rodinného domu a zahrady pro návrh nové zahrady. Model
 | `tools/preview/` | Headless náhled modelu, uloží screenshot každého pohledu. `export.mjs` vyexportuje model pro Blender |
 | `tools/blender/build_scene.py` | Sestaví fotorealistickou scénu v Blenderu a vyrenderuje pohledy v Cycles |
 | `tools/blender/flythrough.py` | Video průlet zahradou (MP4), spouští se po `build_scene.py` |
-| `tools/preview/plan.mjs` | Půdorys stávajícího stavu podle modelu (A3, 1 : 150, PDF + PNG), rostliny očíslované jako v osazovacím plánu. Spuštění: `PW_CHANNEL=chrome node plan.mjs ../blender/data/scene.json out` po exportu |
+| `tools/preview/plan.mjs` | Půdorys A3 1 : 150 (PDF, PNG, SVG) z `layout.json` z editoru: `PW_CHANNEL=chrome node plan.mjs ../editor/layout.json out`, nebo z poslední verze na serveru `… plan.mjs http://192.168.20.30:8083/api/layout out`. Kreslení sdílí s tlačítkem **Půdorys PDF** v editoru (`tools/editor/plan.js`) |
 | `tools/blender/fetch_assets.py` | Stáhne textury, oblohu a modely z Poly Haven do `tools/blender/assets/` |
 | `tools/editor/editor.html` | **Editor layoutu** (vrstvy, přesun, plochy, rostliny z katalogu, kóty). Otevřít dvojklikem, návod v [EDITOR.md](EDITOR.md) |
 | `ROADMAP.md` | Plán: editor layoutu s drag & drop rostlin, živé 3D, Blender pohledy a video ze stejných dat |
@@ -159,7 +161,7 @@ Rendery z Blenderu jsou statické snímky. Jak model procházet, od nejjednoduš
 1. **Walk mód v Blenderu.** `out/garden.blend` přepnout na Eevee a projít ho jako ve hře (`Shift+``, WASD a myš). Funguje hned, jen na Quadro P2000 bude trhanější. Pro procházení je dobré vypnout trávník z instancí (objekt `lawn_points`).
 2. **Video průlet.** Kamera po dráze ulice → zahrada → terasa, render v Cycles do MP4. Fotorealistické, ale ne interaktivní. Render řádově hodiny.
 3. **Procházení v prohlížeči se zapečeným světlem.** Cycles spočítá stíny a odražené světlo do textur (bake) a výsledek se vrátí do webového modelu s ovládáním WASD. Plynulé i na iPadu a mobilu, jde snadno sdílet. Nejlépe sedí k účelu ukazovat návrh zahrady.
-4. **Unreal Engine 5 (do budoucna).** Na Quadro P2000 (4 GB, Pascal) nemá smysl. V záloze je GTX 1070 s 8 GB VRAM, která splňuje doporučených 8 GB. Je to taky Pascal bez RT jader, takže Lumen jen v softwarovém režimu. Je to desktopová karta, takže potřebuje stolní PC, nebo eGPU box přes Thunderbolt 3, pokud ho Dell podporuje (neověřeno). Postup: export `.glb` z Blenderu, import do Unrealu, rozměry v metrech zůstanou.
+4. **Unreal Engine 5 (do budoucna)** na stolním PC s Ryzenem a GTX 1070 8 GB. Plán a omezení jsou v [STAV.md](STAV.md), sekce Unreal.
 
 ## Návrh zahrady
 

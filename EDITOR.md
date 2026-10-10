@@ -77,6 +77,7 @@ Souřadnice v metrech: `x` na východ, `z` na jih k ulici, počátek v SZ rohu d
 - Přichytávání: k mřížce 0,1 m a k bodům ploch, středům rostlin a koncům kót do 8 px.
 - Vrstvy: oko = zobrazit, zámek = zamknout, posuvník = průhlednost, přepínač = aktivní vrstva.
 - **Podklad…** vloží obrázek (letecký snímek, výkres) do vrstvy Podklad. Polohu, šířku v metrech a otočení nastavíte vpravo, pak vrstvu zamknete.
+- **Půdorys PDF** otevře výkres A3 1 : 150 s legendou a počty kusů (stávající / návrh) a nabídne tisk, kde zvolíte Uložit jako PDF. Stejný výkres vyrobí z příkazové řádky `tools/preview/plan.mjs`.
 - **Seznam rostlin** spočítá kusy po druzích (stávající / návrh) a jde zkopírovat jako CSV. **Tisk** vytiskne plán bez ovládání (A3 na šířku).
 
 ## Hotovo (první verze, 10. 10. 2026)
@@ -91,7 +92,7 @@ Souřadnice v metrech: `x` na východ, `z` na jih k ulici, počátek v SZ rohu d
 
 ## Další kroky
 
-1. ~~3D~~ hotovo (`viewer/`, výběr verze). **Napojit `plan.mjs` a Blender na `layout.json`.** `index.html` (3D v prohlížeči), `plan.mjs` (PDF) a `build_scene.py` (Blender) mají číst layout místo konstant v `index.html`. Hotovo je, až změna v editoru po uložení vidět ve 3D i v Blenderu bez ručního přepisování.
+1. ~~3D~~ a ~~půdorys PDF~~ hotovo. **Napojit Blender (`build_scene.py`) na `layout.json`** se stejným výběrem verze jako ve 3D. Hotovo je, až změna v editoru po uložení vidět i v Blender renderu bez ručního přepisování.
 2. **Oblouky:** vyhladit okraj plochy (Catmull-Rom nebo kvadratické segmenty), aby šlo kreslit plynulé okraje záhonů.
 3. **Podklad podle dvou bodů:** kliknout dva body na obrázku a zadat jejich skutečnou vzdálenost, obrázek se sám zvětší a srovná.
 4. **Varianty návrhu (A/B)** a jejich porovnání.

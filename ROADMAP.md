@@ -7,7 +7,7 @@ Postup: **nejdřív editor layoutu, pak Three.js, pak Blender a video.**
 ```
 layout.json  ──►  editor (2D, vrstvy, drag & drop, kóty)  ──►  3D náhled (Three.js)
      │
-     ├──►  půdorys PDF (plan.mjs)
+     ├──►  půdorys PDF (plan.js / plan.mjs, hotovo)
      └──►  Blender: pohledy (build_scene.py)  ──►  video (flythrough.py)
 ```
 
@@ -15,13 +15,13 @@ layout.json  ──►  editor (2D, vrstvy, drag & drop, kóty)  ──►  3D n
 
 - Data layoutu jsou konstanty přímo v `index.html` (`P`, `LAWN`, `DRIVE`, `PLAN_BEDS`, `NORTH_BED`, `NE_YARD`, `SPECIES`, `TREES`, …).
 - `tools/preview/export.mjs` je vyexportuje do `tools/blender/data/scene.json` + `scene.glb`.
-- Z exportu se kreslí půdorys (`plan.mjs`), Blender scéna, pohledy (`build_scene.py`) a video (`flythrough.py`, `encode_video.py`).
+- Z layoutu se kreslí 3D (`viewer/`) a půdorys (`plan.js`). Blender scéna, pohledy a video zatím čtou starý export `scene.json`.
 - Rostliny ve stávajících záhonech generuje algoritmus, nejsou to konkrétní zakreslené kusy.
 - Okraj trávníku je podle náčrtu majitele (10. 10. 2026): rovně podél nového pásu na boku, obloukem do záhonu u ulice a za garáží končí v linii severní zdi garáže. 3D rendery a video jsou ještě ze stavu před touto úpravou.
 
 ## Fáze 1 – data layoutu do samostatného souboru
 
-**Stav:** `layout.json` a katalog existují (`tools/editor/from_scene.mjs`), editor s nimi pracuje. Zbývá na ně přepnout `index.html`, `plan.mjs` a `build_scene.py`.
+**Stav:** `layout.json` a katalog existují (`tools/editor/from_scene.mjs`), editor s nimi pracuje. 3D i půdorys už je čtou, zbývá Blender (`build_scene.py`).
 
 - `layout.json` jako jediný zdroj pravdy. Obsahuje pozemek a hranice, stavby (dům, garáž, pergola, terasa, bazén), zpevněné plochy, trávník, záhony, kačírek, nášlapné desky, mobiliář, stromy a **každou rostlinu jako samostatný kus** (druh, x, z, natočení, velikost).
 - Stávající generované rostliny jednou „zmrazit“ do konkrétních kusů, aby šly ručně posouvat a mazat.
@@ -79,3 +79,7 @@ Pořadí práce: nejdřív vrstvy, zobrazení a přesun existujících prvků, p
 - Kde editor poběží: jen lokálně jako soubor, jako sdílená webová stránka, nebo na NAS (Docker)?
 - Má editor umět i rendery spouštět (tlačítko → render na Dellu), nebo stačí příkaz v terminálu?
 - Přesnější zaměření stávajících keřů a záhonů (měření metrem nebo letecký snímek z dronu), než se stávající stav „zmrazí“.
+
+## Fáze 6 – Unreal Engine (desktop Ryzen + GTX 1070 8 GB)
+
+Podrobně v [STAV.md](STAV.md). Stručně: export architektury a seznamu instancí rostlin z `layout.json`, import do UE5 (Lumen softwarově, bez RT), rostliny přes Foliage/PCG, alternativa Twinmotion.
