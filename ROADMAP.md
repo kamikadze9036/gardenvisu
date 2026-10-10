@@ -21,12 +21,16 @@ layout.json  ──►  editor (2D, vrstvy, drag & drop, kóty)  ──►  3D n
 
 ## Fáze 1 – data layoutu do samostatného souboru
 
+**Stav:** `layout.json` a katalog existují (`tools/editor/from_scene.mjs`), editor s nimi pracuje. Zbývá na ně přepnout `index.html`, `plan.mjs` a `build_scene.py`.
+
 - `layout.json` jako jediný zdroj pravdy. Obsahuje pozemek a hranice, stavby (dům, garáž, pergola, terasa, bazén), zpevněné plochy, trávník, záhony, kačírek, nášlapné desky, mobiliář, stromy a **každou rostlinu jako samostatný kus** (druh, x, z, natočení, velikost).
 - Stávající generované rostliny jednou „zmrazit“ do konkrétních kusů, aby šly ručně posouvat a mazat.
 - `catalog.json` s katalogem druhů: český a latinský název, výška, šířka, barva listu a květu, doba kvetení, stálezelená ano/ne a typ 3D tvaru pro Blender (tráva, klasy, kopretina, polštář, hortenzie, keř, strom…).
 - `index.html`, `export.mjs`, `plan.mjs` a `build_scene.py` čtou `layout.json` místo konstant v kódu.
 
 ## Fáze 2 – editor layoutu (2D), „jednoduchý AutoCAD“
+
+**Stav:** první verze hotová, viz [EDITOR.md](EDITOR.md) (zadání, datový formát, ovládání, další kroky).
 
 Výchozí nástroj pro přípravu layoutu. Funguje jako zjednodušený AutoCAD: pár vrstev přes sebe, kreslení, přesouvání a kóty. Layout se v něm skládá postupně a teprve hotový jde do Three.js.
 

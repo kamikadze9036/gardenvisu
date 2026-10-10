@@ -21,6 +21,7 @@ Interaktivní 3D model rodinného domu a zahrady pro návrh nové zahrady. Model
 | `tools/blender/flythrough.py` | Video průlet zahradou (MP4), spouští se po `build_scene.py` |
 | `tools/preview/plan.mjs` | Půdorys stávajícího stavu podle modelu (A3, 1 : 150, PDF + PNG), rostliny očíslované jako v osazovacím plánu. Spuštění: `PW_CHANNEL=chrome node plan.mjs ../blender/data/scene.json out` po exportu |
 | `tools/blender/fetch_assets.py` | Stáhne textury, oblohu a modely z Poly Haven do `tools/blender/assets/` |
+| `tools/editor/editor.html` | **Editor layoutu** (vrstvy, přesun, plochy, rostliny z katalogu, kóty). Otevřít dvojklikem, návod v [EDITOR.md](EDITOR.md) |
 | `ROADMAP.md` | Plán: editor layoutu s drag & drop rostlin, živé 3D, Blender pohledy a video ze stejných dat |
 | `podklady/navrh/` | Osazovací plán, inspirační fotky (cesta za domem, zastřešení bazénu). **Jen lokálně** |
 | `podklady/fotky/realita/` | Fotky skutečného stavu 01–22 a jejich popis `POPIS.md`. **Jen lokálně** |
@@ -150,7 +151,7 @@ Vrstva **Návrh** ve webu a stejná data v Blenderu (konstanty `SPECIES`, `PLAN_
 
 ## Další kroky
 
-- **Editor layoutu a celý proces layout → 3D → Blender → video: viz [ROADMAP.md](ROADMAP.md).**
+- **Editor layoutu:** první verze je v `tools/editor/editor.html`, návod a zadání v [EDITOR.md](EDITOR.md). Další krok je napojit 3D a Blender na `layout.json` (celý plán v [ROADMAP.md](ROADMAP.md)).
 - Upřesnit návrh za domem a na dvorku podle skutečného plánu.
 - Finální video ve vyšší kvalitě, procházení podle plánu výše (Walk mód, zapečené světlo pro web).
 - Export `.glb` pro Unreal nebo Twinmotion.
