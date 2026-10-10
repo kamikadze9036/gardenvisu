@@ -47,12 +47,11 @@ Směry jsou podle modelu: sever = za domem, jih = ulice s vjezdem, západ = bok 
 | 18 | z trávníku → JZ | Jižní konec západního záhonu: bobkovišeň, ruj, muchovník (červený), kleč, ostřice, balvany. Vpravo sousedův dřevěný přístřešek. |
 | 19 | od bazénu → S | Celý západní pás: vlevo keře a stromy, pás hlíny s ocelovým obrubníkem, vpravo terasa, pergola s prosklením, zastřešení bazénu. |
 | 20 | od bazénu → SZ | Totéž šikmo: balvany, cedry, velký strom, hlína před záhonem. |
+| 21 | z JV rohu terasy → Z | Zastřešení bazénu Mountfield (3 segmenty) zblízka, hnědá WPC terasa, pergola. |
+| 22 | podél kolejnic → Z | Totéž z druhé strany: stříbrné kolejnice po celé terase, mléčné žebrované desky, antracitové profily. |
 
 ## Jak je to v modelu (odhad z fotek)
 
 - **Bok:** rovný pás 18 m × 1 m před keři. Začíná na severu, kde už jsou zasazené trvalky, a pokračuje na jih k bazénu: nejdřív 12m záhon, pak 6m. Širší kus hlíny s deskou u terasy bude zase trávník (byl spálený). Domek 1,2 × 1,2 m, stěny 1,2 m + střecha, 1 m od plotu. Za domem 2,71 + 2,00 m od zdi k hranici (situace C.2).
 - **Za domem:** pás hlíny mezi okapovými oblázky (0,4 m u zdi) a záhonem u pletiva, asi z = −3,3 až −0,4 m.
 - **Dvorek za garází:** hlína mezi záhonem dochanů a hortenzií a zdí garáže. Domek a dřevník jsou v SV rohu, posezení u zdi garáže.
-
-| 21 | z JV rohu terasy → Z | Zastřešení bazénu Mountfield (3 segmenty) zblízka, hnědá WPC terasa, pergola. |
-| 22 | podél kolejnic → Z | Totéž z druhé strany: stříbrné kolejnice po celé terase, mléčné žebrované desky, antracitové profily. |
