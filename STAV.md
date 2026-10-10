@@ -2,6 +2,20 @@
 
 Tento soubor je **vstupní bod pro nový chat** (Claude, Codex, ChatGPT nebo člověka). Shrnuje, co projekt je, co běží, kde co leží, jaká padla rozhodnutí a co je další krok. Podrobnosti jsou v [README.md](README.md), [ROADMAP.md](ROADMAP.md), [EDITOR.md](EDITOR.md) a [viewer/README.md](viewer/README.md).
 
+## ⚠ Co v repozitáři chybí: složka `podklady/`
+
+Složka `podklady/` je v `.gitignore` a **na GitHubu ani na Dellu není**. Je jen na Macu majitele v `~/Projects/gardenvisu/podklady/`. Obsahuje osobní údaje a výkresy jsou autorským dílem architekta. Když ji potřebujete, **požádejte o ni majitele** (pošle soubory do chatu nebo je zkopíruje do stejné cesty). Kód bez ní funguje, chybí jen předlohy.
+
+| Cesta | Obsah | Kde je popis bez souborů |
+|---|---|---|
+| `podklady/vykresy/` | projektová dokumentace DPS (PDF): situace C.2, půdorysy přízemí a podkroví, řezy, pohledy JZ/SV/SZ/JV | rozměry přepsané do `index.html` a do tabulky „Odkud jsou rozměry“ v README |
+| `podklady/fotky/letecky-*.jpg`, `ulice-*.png` | letecké snímky (jeden s měřítkem 12 m) a fotky z ulice, ze kterých vznikl první model | README, tabulka rozměrů |
+| `podklady/fotky/realita/01–22` + `POPIS.md` | fotky skutečného stavu z října 2026: 01–09 a 21–22 se nemění, 10–20 jsou místa, která se mění | **[docs/FOTKY.md](docs/FOTKY.md)** |
+| `podklady/navrh/osazovaci-plan-*.png` | ručně kreslený osazovací plán (paní Králová): rozšíření záhonu, 2 pásy 12 + 6 m, 10 druhů s čísly | přepsaný do `PLAN_BEDS` a `SPECIES` v `index.html`, v layoutu jako druhy 1–10 |
+| `podklady/navrh/inspirace-cesta-za-domem.png`, `zastreseni-bazenu.png` | inspirace: nášlapné desky v trvalkách, nízké zastřešení bazénu | STAV.md, rozhodnutí |
+
+Codexův web na Dellu (8082) má kopii 7 fotek z `realita/`. Je to jeho vlastní nasazení, z repozitáře to neplyne.
+
 ## Proč projekt existuje
 
 Majitel předělává **bok domu (západ)** a **prostor za domem (sever)** včetně dvorku za garáží a chce si návrh zahrady prohlédnout co nejvěrněji realitě. Postup je: 2D layout v editoru → 3D v prohlížeči → fotorealistické pohledy v Blenderu → video. Výhledově přibude Unreal Engine na stolním PC (viz níže).

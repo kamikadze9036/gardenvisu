@@ -52,7 +52,7 @@ Starší verze vznikaly postupně během jednoho rozhovoru. Každá další při
 
 Druhy a rozmístění rostlin ve stávajících záhonech jsou orientační (generované podle fotek). Návrh je popsaný níže.
 
-Výkresy a fotky obsahují osobní údaje a výkresy jsou autorským dílem architekta, proto jsou ve složce `podklady/`, kterou git ignoruje.
+Výkresy a fotky obsahují osobní údaje a výkresy jsou autorským dílem architekta, proto jsou ve složce `podklady/`, kterou git ignoruje. Seznam toho, co v ní je, a kde jsou popisy bez souborů, najdete v [STAV.md](STAV.md) (sekce „Co v repozitáři chybí“). Popis fotek skutečnosti je v [docs/FOTKY.md](docs/FOTKY.md).
 
 ## Jak je model udělaný
 
