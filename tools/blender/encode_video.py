@@ -1,7 +1,7 @@
 # Joins the PNG frames from `flythrough.py --png` (out/fly_frames/fNNNN.png) into out/flythrough.mp4 with Blender's
 # video sequencer, so no separate ffmpeg is needed:
 #
-#   blender -b --factory-startup --python encode_video.py -- [--fps 25]
+#   blender -b --factory-startup --python encode_video.py -- [--fps 25] [--small]   (--small: about 4× smaller file for sharing)
 import bpy, glob, os, sys
 
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
@@ -22,8 +22,8 @@ scene.frame_start, scene.frame_end = 1, len(frames)
 im = scene.render.image_settings
 im.media_type = 'VIDEO'; im.file_format = 'FFMPEG'
 scene.render.ffmpeg.format = 'MPEG4'; scene.render.ffmpeg.codec = 'H264'
-scene.render.ffmpeg.constant_rate_factor = 'PERC_LOSSLESS'; scene.render.ffmpeg.ffmpeg_preset = 'BEST'
-scene.render.filepath = os.path.join(OUT, 'flythrough.mp4')
+scene.render.ffmpeg.constant_rate_factor = 'LOW' if '--small' in argv else 'PERC_LOSSLESS'; scene.render.ffmpeg.ffmpeg_preset = 'BEST'
+scene.render.filepath = os.path.join(OUT, 'flythrough-small.mp4' if '--small' in argv else 'flythrough.mp4')
 scene.render.use_file_extension = False
 bpy.ops.render.render(animation=True)
 print('video', scene.render.filepath, len(frames), 'frames')
