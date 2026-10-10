@@ -6,6 +6,10 @@ Zjednodušený AutoCAD pro zahradu: vrstvy přes sebe, přesouvání tažením, 
 
 Otevřít `tools/editor/editor.html` dvojklikem. Nepotřebuje server ani internet: výchozí layout se načte z `layout.js` vedle něj. Změny se průběžně ukládají v prohlížeči. Tlačítko **Uložit** stáhne `layout.json` a **Otevřít…** ho zase načte. **Výchozí** zahodí změny a načte layout z modelu.
 
+Na Dellu běží editor v kontejneru na http://192.168.20.30:8083 (viz README, „Nasazení na Dell“). Tam tlačítko **Uložit** (Ctrl+S) ukládá layout na server a stavový řádek ukazuje, jestli jsou změny uložené. Neuložené změny drží prohlížeč, dokud se neuloží. Když mezitím uložil někdo jiný, editor se zeptá, jestli jeho verzi přepsat. **Stáhnout** uloží `layout.json` do počítače.
+
+API editoru (`deploy/editor/server.py`): `GET /api/layout` vrátí layout a revizi v hlavičce `X-Rev`, `PUT /api/layout` s hlavičkou `X-Base-Rev` uloží (409, pokud se revize mezitím změnila). Předchozí verze jdou do `/data/history`.
+
 ## Soubory
 
 | Soubor | Co dělá |

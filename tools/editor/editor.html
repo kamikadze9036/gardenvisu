@@ -120,8 +120,9 @@ dialog td.n{text-align:right}
     <button id="fit" title="Celý plán (F)">Celé</button>
   </div>
   <div class="grp">
-    <button id="open">Otevřít…</button>
-    <button id="save" title="Uložit layout.json (Ctrl+S)">Uložit</button>
+    <button id="open" title="Načíst layout.json ze souboru">Otevřít…</button>
+    <button id="save" title="Uložit (Ctrl+S): na serveru, nebo jako soubor, když editor běží bez serveru">Uložit</button>
+    <button id="download" title="Stáhnout layout.json do počítače">Stáhnout</button>
     <button id="underlay" title="Vložit obrázek jako podklad">Podklad…</button>
     <button id="list">Seznam rostlin</button>
     <button id="print">Tisk</button>
@@ -153,7 +154,7 @@ dialog td.n{text-align:right}
 <aside id="right"><section id="props"><h2>Vlastnosti</h2><div id="propBody"><p class="info">Nic není vybráno. Klikněte na prvek v plánu, nebo táhněte obdélník.</p></div></section>
 <section><h2>Ovládání</h2><p class="info" style="color:var(--muted);margin:0">Kolečko = zoom, mezerník + tažení = posun. Šipky posouvají výběr o 0,1 m (Shift 1 m), R otočí o 15°, Ctrl+D zkopíruje, Delete smaže. U plochy táhněte body, kolečko uprostřed hrany přidá bod, Alt+klik bod smaže.</p></section></aside>
 
-<footer><span id="pos">x –, z –</span><span id="zoom"></span><span id="selInfo"></span><span id="hint"></span></footer>
+<footer><span id="saveState"></span><span id="pos">x –, z –</span><span id="zoom"></span><span id="selInfo"></span><span id="hint"></span></footer>
 
 <dialog id="dlg"><div id="dlgBody"></div><p style="text-align:right;margin:12px 0 0"><button id="dlgCopy">Kopírovat CSV</button> <button onclick="this.closest('dialog').close()">Zavřít</button></p></dialog>
 
@@ -166,7 +167,8 @@ const ROLE_LAYER = {lawn:'beds', bed:'beds', gravel:'paving', pave:'paving', sto
 const ROLE_NAME = {plot:'pozemek', building:'stavba', deck:'terasa', pool:'bazén', pergola:'pergola', planter:'vyvýšený záhon', structure:'stavba',
   fire:'ohniště', pave:'dlažba', stone:'kamenná dlažba', gravel:'kačírek', slab:'nášlapná deska', lawn:'trávník', bed:'záhon'};
 const svg = document.getElementById('plan'), content = document.getElementById('content'), overlay = document.getElementById('overlay');
-let L = load();                         // the layout
+let L = structuredClone(window.DEFAULT_LAYOUT);   // the layout; replaced by init() with the server or browser copy
+let server = false, serverRev = '', dirty = false;   // server = editor runs from the gardenvisu container
 let sel = new Set();                     // selected item ids
 let tool = 'select', activeLayer = 'plants-new', activeSp = null;
 let snapGrid = true, snapVert = true, STEP = 0.1;
@@ -176,11 +178,32 @@ let draft = null;                        // points while drawing a polygon / row
 let vertexSel = null;                    // {id, i} when a single polygon vertex is being dragged
 let nextId = 1 + Math.max(0, ...L.items.map(i => +String(i.id).replace(/\D/g, '') || 0));
 
-function load(){
-  try { const s = localStorage.getItem(STORE); if (s) return JSON.parse(s); } catch(e) {}
-  return structuredClone(window.DEFAULT_LAYOUT);
+// Where the layout comes from: the server (the gardenvisu container), else the browser's draft, else the default.
+// The browser keeps a draft of unsaved changes together with the server revision it was based on.
+async function init(){
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch(e) {}
+  if (location.protocol !== 'file:') try {
+    const r = await fetch('api/layout', {cache: 'no-store'});
+    if (r.ok || r.status === 404){
+      server = true; serverRev = r.headers.get('X-Rev') || '';
+      if (r.ok) L = await r.json();
+      if (draft && draft.base === serverRev && draft.layout){ L = draft.layout; dirty = true; hint('Obnoveny neuložené změny z tohoto prohlížeče.'); }
+      else if (!r.ok) hint('Na serveru zatím není uložený layout, načten výchozí z modelu.');
+    }
+  } catch(e) { /* opened from disk: no server */ }
+  if (!server && draft?.layout) L = draft.layout;
+  nextId = 1 + Math.max(0, ...L.items.map(i => +String(i.id).replace(/\D/g, '') || 0));
+  saveState();
 }
-function persist(){ try { localStorage.setItem(STORE, JSON.stringify(L)); } catch(e) { hint('Automatické uložení v prohlížeči se nepovedlo (moc velký podklad?). Uložte soubor.'); } }
+function saveState(){
+  document.getElementById('saveState').textContent = server ? (dirty ? '● neuloženo' : '✓ uloženo na serveru') : (dirty ? '● změny jen v prohlížeči' : 'bez serveru');
+  document.getElementById('saveState').style.color = dirty ? '#b5402f' : '';
+}
+function persist(){
+  dirty = true; saveState();
+  try { localStorage.setItem(STORE, JSON.stringify({base: serverRev, layout: L})); } catch(e) { hint('Automatické uložení v prohlížeči se nepovedlo (moc velký podklad?). Uložte.'); }
+}
 function commit(){ undoStack.push(JSON.stringify(L)); if (undoStack.length > 150) undoStack.shift(); redoStack = []; }
 function changed(){ persist(); render(); }
 const byId = id => L.items.find(i => i.id === id);
@@ -572,7 +595,22 @@ window.addEventListener('keyup', ev => { if (ev.key === ' '){ spaceDown = false;
 // ---------- history, files ----------
 function undo(){ if (!undoStack.length) return; redoStack.push(JSON.stringify(L)); L = JSON.parse(undoStack.pop()); sel = new Set([...sel].filter(byId)); changed(); }
 function redo(){ if (!redoStack.length) return; undoStack.push(JSON.stringify(L)); L = JSON.parse(redoStack.pop()); sel = new Set([...sel].filter(byId)); changed(); }
-function save(){
+async function save(force = false){
+  if (!server) return download();
+  L.meta = {...(L.meta || {}), saved: new Date().toISOString()};
+  try {
+    const r = await fetch('api/layout', {method: 'PUT', headers: {'Content-Type': 'application/json', 'X-Base-Rev': serverRev, ...(force ? {'X-Force': '1'} : {})}, body: JSON.stringify(L)});
+    if (r.status === 409){
+      if (confirm('Někdo mezitím uložil jinou verzi. Přepsat ji vaší? (Zrušit = nechat a načíst verzi ze serveru.)')) return save(true);
+      localStorage.removeItem(STORE); location.reload(); return;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    serverRev = (await r.json()).rev; dirty = false; saveState();
+    try { localStorage.removeItem(STORE); } catch(e) {}
+    hint('Uloženo na serveru. Předchozí verze je v historii.');
+  } catch(err){ hint('Uložení na server se nepovedlo: ' + err.message + '. Změny zůstávají v prohlížeči.'); }
+}
+function download(){
   L.meta = {...(L.meta || {}), saved: new Date().toISOString()};
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(L, null, 1)], {type: 'application/json'}));
   a.download = 'layout.json'; a.click(); URL.revokeObjectURL(a.href); hint('Uloženo jako layout.json (složka Stažené).');
@@ -609,14 +647,14 @@ function toggle(id){ const b = document.getElementById(id), on = b.getAttribute(
 document.querySelectorAll('#tools button').forEach(b => b.onclick = () => setTool(b.dataset.tool));
 ['snapGrid', 'snapVert', 'showGrid'].forEach(id => document.getElementById(id).onclick = () => toggle(id));
 document.getElementById('undo').onclick = undo; document.getElementById('redo').onclick = redo; document.getElementById('fit').onclick = fit;
-document.getElementById('save').onclick = save; document.getElementById('open').onclick = () => document.getElementById('fileJson').click();
+document.getElementById('save').onclick = () => save(); document.getElementById('download').onclick = download; document.getElementById('open').onclick = () => document.getElementById('fileJson').click();
 document.getElementById('underlay').onclick = () => document.getElementById('fileImg').click();
 document.getElementById('list').onclick = plantList; document.getElementById('print').onclick = () => { sel.clear(); render(); fit(); setTimeout(print, 50); };
 document.getElementById('reset').onclick = () => { if (!confirm('Zahodit všechny změny a načíst výchozí layout?')) return; commit(); L = structuredClone(window.DEFAULT_LAYOUT); sel.clear(); changed(); fit(); };
 document.getElementById('search').oninput = renderCatalog;
 new ResizeObserver(applyView).observe(svg);
 
-renderCatalog(); render(); setTool('select'); fit();
+init().then(() => { renderCatalog(); render(); setTool('select'); fit(); });
 window.EDITOR = {get layout(){ return L; }, select: ids => { sel = new Set(ids); render(); }, render};   // for tests and the console
 </script>
 </html>

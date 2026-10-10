@@ -61,6 +61,25 @@ Výkresy a fotky obsahují osobní údaje a výkresy jsou autorským dílem arch
 - **Rostliny** generuje algoritmus s pevným semínkem: projde pozemek po 0,72 m a rostlinu dá tam, kde není trávník, dlažba, terasa ani stavba. Kreslí se přes `InstancedMesh`.
 - **Knihovny:** three.js r128 a OrbitControls z CDN (cdnjs, jsDelivr).
 
+## Nasazení na Dell (Docker)
+
+Dva kontejnery v jednom Compose projektu `gardenvisu` (`deploy/compose.yaml`), dostupné v domácí síti:
+
+| Služba | Adresa | Co to je |
+|---|---|---|
+| `editor` | http://192.168.20.30:8083 | Editor layoutu. Layout se ukládá na server (svazek `gardenvisu_layout`, historie posledních 50 verzí), takže je stejný na všech zařízeních |
+| `viewer` | http://192.168.20.30:8084 | 3D model v Three.js (`index.html`) a starší verze v `/verze/` |
+
+Aktualizace po změnách v repu (z Macu):
+
+```
+git ls-files -co --exclude-standard > /tmp/files.txt
+rsync -a --files-from=/tmp/files.txt ./ dell:Projects/gardenvisu/
+ssh dell 'cd ~/Projects/gardenvisu/deploy && docker compose up -d --build'
+```
+
+Kontejnery běží bez root práv, s read-only systémem souborů a limitem 256 MB RAM. Codexův samostatný vývoj je jiný Compose projekt (`~/gardenvisu-deploy/web`, port 8082) a tenhle ho nijak neovlivňuje.
+
 ## Ověření změn
 
 ```

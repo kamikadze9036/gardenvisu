@@ -1,0 +1,15 @@
+{
+	auto_https off
+	admin off
+}
+:8080 {
+	root * /srv
+	encode zstd gzip
+	respond /healthz "ok" 200
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		Cache-Control "no-cache"
+	}
+	file_server
+}

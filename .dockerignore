@@ -1,0 +1,7 @@
+.git
+podklady
+tools/preview/node_modules
+tools/preview/out
+tools/blender/assets
+tools/blender/out
+tools/blender/data

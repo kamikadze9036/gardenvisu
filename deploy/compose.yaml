@@ -1,0 +1,40 @@
+# gardenvisu on the Dell: the layout editor and the Three.js model as two containers.
+#
+#   cd ~/Projects/gardenvisu/deploy && docker compose up -d --build
+#
+# Editor  http://192.168.20.30:8083   (layout saved in the volume gardenvisu_layout, history of 50 versions)
+# 3D      http://192.168.20.30:8084
+name: gardenvisu
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: [/tmp:size=16m]
+  mem_limit: 256m
+  cpus: 1
+services:
+  editor:
+    <<: *hardening
+    build: { context: .., dockerfile: deploy/editor/Dockerfile }
+    image: gardenvisu-editor:local
+    ports: ["192.168.20.30:8083:8080"]
+    volumes: [layout:/data]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+  viewer:
+    <<: *hardening
+    build: { context: .., dockerfile: deploy/viewer/Dockerfile }
+    image: gardenvisu-viewer:local
+    ports: ["192.168.20.30:8084:8080"]
+    tmpfs: [/tmp:size=16m, /data, /config]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+volumes:
+  layout:
