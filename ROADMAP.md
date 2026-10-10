@@ -2,8 +2,10 @@
 
 Cíl: zahradu navrhovat ve 2D layoutu přetahováním rostlin a úpravou trávníku a záhonů. Ze stejných dat se pak vykreslí 3D model v prohlížeči, fotorealistické pohledy z Blenderu a video průlet.
 
+Postup: **nejdřív editor layoutu, pak Three.js, pak Blender a video.**
+
 ```
-layout.json  ──►  editor (2D, drag & drop)  ──►  živý 3D náhled (Three.js)
+layout.json  ──►  editor (2D, vrstvy, drag & drop, kóty)  ──►  3D náhled (Three.js)
      │
      ├──►  půdorys PDF (plan.mjs)
      └──►  Blender: pohledy (build_scene.py)  ──►  video (flythrough.py)
@@ -24,17 +26,30 @@ layout.json  ──►  editor (2D, drag & drop)  ──►  živý 3D náhled (
 - `catalog.json` s katalogem druhů: český a latinský název, výška, šířka, barva listu a květu, doba kvetení, stálezelená ano/ne a typ 3D tvaru pro Blender (tráva, klasy, kopretina, polštář, hortenzie, keř, strom…).
 - `index.html`, `export.mjs`, `plan.mjs` a `build_scene.py` čtou `layout.json` místo konstant v kódu.
 
-## Fáze 2 – editor layoutu (2D)
+## Fáze 2 – editor layoutu (2D), „jednoduchý AutoCAD“
 
-Stránka `editor.html` ve stylu půdorysu z `plan.mjs`:
+Výchozí nástroj pro přípravu layoutu. Funguje jako zjednodušený AutoCAD: pár vrstev přes sebe, kreslení, přesouvání a kóty. Layout se v něm skládá postupně a teprve hotový jde do Three.js.
 
-- **Rostliny:** panel s katalogem, přetažením na plán vznikne rostlina ve skutečné velikosti. Jde ji posouvat, otáčet, mazat a kopírovat. Hromadný výběr a „vysadit řadu po 0,5 m“ jako v osazovacím plánu.
-- **Plochy:** okraj trávníku, záhonů a cest jako křivky. Body jde táhnout, přidávat a mazat, okraje vyhlazovat do oblouků. Změna trávníku automaticky změní záhon a naopak.
-- **Pomůcky:** mřížka a přichytávání (0,1 m), měření vzdáleností, kóty, vrstvy (stávající stav / návrh), zamčení staveb.
-- **Varianty:** „stávající stav“, „návrh A“, „návrh B“ a jejich porovnání vedle sebe.
-- **Ukládání:** export a import `layout.json`, průběžné ukládání v prohlížeči, historie kroků zpět. Volitelně sdílené úložiště, aby šlo editovat i z iPadu.
-- **Výstupy:** tisk půdorysu do PDF (A3, 1 : 150) a seznam rostlin k nákupu (druh, počet).
-- Ovládání myší i dotykem (iPad).
+**Vrstvy** (každá jde zapnout, vypnout, zamknout a nastavit průhlednost):
+1. Podklad: letecký snímek nebo výkres situace, srovnaný do měřítka podle dvou bodů. Jen lokálně, není v gitu.
+2. Pozemek a stavby: hranice, dům, garáž, terasa, bazén, pergola (běžně zamčené).
+3. Zpevněné plochy: příjezd, dlažba, kačírek, nášlapné desky.
+4. Trávník a záhony.
+5. Rostliny: stávající.
+6. Rostliny: návrh.
+7. Kóty a popisky.
+
+**Nástroje:**
+- výběr, přesun tažením (drag & drop), otočení, kopie, smazání, hromadný výběr obdélníkem,
+- kreslení ploch: lomená čára a oblouk, úprava tažením bodů, přidání a smazání bodu,
+- rostlina z katalogu přetažením do plánu, ve skutečné velikosti; „řada po 0,5 m“ jako v osazovacím plánu,
+- kóta mezi dvěma body a délka hrany, měření vzdálenosti,
+- mřížka a přichytávání (k mřížce 0,1 m, k bodům a hranám), zoom a posun plánu,
+- zpět a znovu, uložení a otevření `layout.json`, průběžné ukládání v prohlížeči.
+
+**Výstup:** `layout.json`, tisk půdorysu do PDF (A3, 1 : 150) a seznam rostlin k nákupu.
+
+Pořadí práce: nejdřív vrstvy, zobrazení a přesun existujících prvků, pak kreslení ploch, kóty, rostliny z katalogu a nakonec tisk a seznam. Varianty návrhu (A/B) a ovládání na iPadu přijdou až potom.
 
 ## Fáze 3 – živý 3D náhled
 
