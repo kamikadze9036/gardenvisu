@@ -164,7 +164,6 @@ const DESIGN_BEDS = [NORTH_BED, NE_YARD, ...PLAN_BEDS.map(b=>[[b.x0,b.z0],[b.x0+
 
 // Trees: position, height, crown radius, colour
 const TREES = [
-  {kind:'deciduous',x:10.3,z:18.3,h:3.6,r:0.9,c:'#c4703a'},   // young tree in front of the terrace, autumn colours in the photos
   {kind:'deciduous',x:12.6,z:27.0,h:4.6,r:1.4,c:'#5b8540'},   // tree in the south bed (newer aerial)
   {kind:'deciduous',x:16.4,z:29.2,h:4.2,r:0.8,c:'#4a2a35'},   // weeping purple beech by the gate (photo 07)
   {kind:'deciduous',x:26.3,z:19.5,h:4.5,r:1.3,c:'#7d9a45'},   // birch by the east boundary (photo 09)
@@ -258,7 +257,8 @@ PLAN_BEDS.forEach(b=>[['back',0.25,0],['front',0.75,0.25]].forEach(([row,dx,dz])
 const EXISTING = [   // strip of fountain grass and hydrangeas (photos 10–12), the bed by the garage wall
   ...[16.7,17.4,18.1,18.8,19.5,20.2,20.9,21.5].map((x,i)=>({sp:i%3===2?11:12, x, z:-0.95+(i%2)*0.25})),
   {sp:13,x:15.6,z:3.65},{sp:11,x:16.0,z:2.9},{sp:11,x:19.0,z:3.55},{sp:11,x:20.1,z:3.6},{sp:13,x:21.4,z:3.6},{sp:12,x:22.3,z:3.2},
-  {sp:11,x:11.3,z:15.2},{sp:11,x:12.4,z:15.6},{sp:13,x:11.6,z:14.4}     // pebble bed by the entrance
+  {sp:11,x:11.3,z:15.2},{sp:11,x:12.4,z:15.6},{sp:13,x:11.6,z:14.4},    // pebble bed by the entrance, planted in the ground
+  {sp:11,x:12.9,z:16.6},{sp:9,x:11.1,z:17.0},{sp:12,x:12.7,z:14.4}
 ];
 EXISTING.forEach(p=>DESIGN_PLANTS.push({...p, rot:rand()*Math.PI*2, existing:true}));
 const FREE = (x,z) => !nearPath(x,z,PATH.across/2+0.15) && Math.hypot(x-FIRE.x,z-FIRE.z)>FIRE.r+0.2
@@ -577,12 +577,6 @@ function build(renderer){
     box(G.terrace,x-0.22,x+0.22,F+0.43,F+0.47,z-0.22,z+0.22,MAT.groove);
     box(G.terrace,x-0.22,x+0.22,F+0.47,F+0.9,bz-0.03,bz+0.03,MAT.groove);
   }));
-  // Pots on the entrance patio
-  [[12.0,15.2],[13.1,16.7],[11.2,16.8],[13.7,14.9]].forEach(([x,z],i)=>{
-    const p=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.24,0.5,16),MAT.pot); p.position.set(x,0.28,z); G.terrace.add(shadow(p));
-    const f=new THREE.Mesh(new THREE.SphereGeometry(0.32,12,10),M(['#5d8a45','#8a64b0','#4f7a3a','#c99a4a'][i],{name:'potplant'}));
-    f.position.set(x,0.68,z); G.terrace.add(shadow(f));
-  });
 
   // ----- Raised vegetable planters by the north boundary -----
   PLANTERS.forEach(([a,b])=>{
