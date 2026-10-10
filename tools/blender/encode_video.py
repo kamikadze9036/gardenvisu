@@ -15,7 +15,7 @@ w, h = bpy.data.images.load(frames[0]).size
 scene.render.resolution_x, scene.render.resolution_y, scene.render.resolution_percentage = w, h, 100
 scene.render.fps = FPS
 seq = scene.sequence_editor_create()
-strips = getattr(seq, 'strips', None) or seq.sequences
+strips = seq.strips if hasattr(seq, 'strips') else seq.sequences   # renamed in Blender 5
 strip = strips.new_image('frames', frames[0], 1, 1)
 for f in frames[1:]: strip.elements.append(os.path.basename(f))
 scene.frame_start, scene.frame_end = 1, len(frames)
