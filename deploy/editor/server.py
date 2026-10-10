@@ -2,10 +2,12 @@
 #
 #   GET  /                 editor.html
 #   GET  /api/layout       the saved layout (404 until the first save); header X-Rev = revision
+#   GET  /api/layout?v=ID  an older version from the history (ID from /api/versions)
+#   GET  /api/versions     current + history, newest first: [{id, saved, label, items, rev}]
 #   PUT  /api/layout       save; send X-Base-Rev with the revision you loaded, 409 if someone saved in between
 #                          (X-Force: 1 overwrites). The previous version goes to /data/history (last 50 kept).
 #   GET  /healthz          ok
-import hashlib, json, os, time
+import hashlib, json, os, re, time
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 STATIC = os.environ.get('STATIC', '/app/static')
@@ -17,6 +19,21 @@ KEEP = 50
 
 def rev_of(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()[:16]
+
+def versions():
+    """The saved layout and its history with the time, label and size from each file's meta."""
+    files = [('current', LAYOUT)] if os.path.exists(LAYOUT) else []
+    if os.path.isdir(HISTORY):
+        files += [(n, os.path.join(HISTORY, n)) for n in sorted(os.listdir(HISTORY), reverse=True)]
+    out = []
+    for vid, path in files:
+        try:
+            raw = open(path, 'rb').read(); data = json.loads(raw); meta = data.get('meta') or {}
+            out.append({'id': vid, 'saved': meta.get('saved') or time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(os.path.getmtime(path))),
+                        'label': meta.get('label') or '', 'items': len(data.get('items', [])), 'rev': rev_of(raw)})
+        except Exception:
+            continue
+    return out
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
@@ -39,9 +56,12 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split('?')[0]
         if path == '/healthz': return self.reply(200, b'ok', 'text/plain')
+        if path == '/api/versions': return self.reply(200, json.dumps(versions(), ensure_ascii=False).encode())
         if path == '/api/layout':
-            if not os.path.exists(LAYOUT): return self.reply(404, b'{"error":"no layout saved yet"}')
-            raw = open(LAYOUT, 'rb').read()
+            v = (self.path.split('v=', 1)[1].split('&')[0] if 'v=' in self.path else 'current')
+            file = LAYOUT if v == 'current' else os.path.join(HISTORY, v) if re.fullmatch(r'layout-[\d-]+\.json', v) else None
+            if not file or not os.path.exists(file): return self.reply(404, b'{"error":"no such layout"}')
+            raw = open(file, 'rb').read()
             return self.reply(200, raw, headers=[('X-Rev', rev_of(raw))])
         if path == '/': self.path = '/editor.html'
         return super().do_GET()

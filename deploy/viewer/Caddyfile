@@ -6,10 +6,23 @@
 	root * /srv
 	encode zstd gzip
 	respond /healthz "ok" 200
+	# layouts from the editor container, read-only
+	@apiRead {
+		path /api/*
+		method GET
+	}
+	reverse_proxy @apiRead editor:8080
+	@apiWrite {
+		path /api/*
+		not method GET
+	}
+	respond @apiWrite "read-only" 405
 	header {
 		X-Content-Type-Options nosniff
 		Referrer-Policy same-origin
 		Cache-Control "no-cache"
 	}
+	@assets path *.glb *.bin *.jpg *.png *.hdr
+	header @assets Cache-Control "public, max-age=3600"
 	file_server
 }

@@ -6,7 +6,7 @@ Zjednodušený AutoCAD pro zahradu: vrstvy přes sebe, přesouvání tažením, 
 
 Otevřít `tools/editor/editor.html` dvojklikem. Nepotřebuje server ani internet: výchozí layout se načte z `layout.js` vedle něj. Změny se průběžně ukládají v prohlížeči. Tlačítko **Uložit** stáhne `layout.json` a **Otevřít…** ho zase načte. **Výchozí** zahodí změny a načte layout z modelu.
 
-Na Dellu běží editor v kontejneru na http://192.168.20.30:8083 (viz README, „Nasazení na Dell“). Tam tlačítko **Uložit** (Ctrl+S) ukládá layout na server a stavový řádek ukazuje, jestli jsou změny uložené. Neuložené změny drží prohlížeč, dokud se neuloží. Když mezitím uložil někdo jiný, editor se zeptá, jestli jeho verzi přepsat. **Stáhnout** uloží `layout.json` do počítače.
+Na Dellu běží editor v kontejneru na http://192.168.20.30:8083 (viz README, „Nasazení na Dell“). Tam tlačítko **Uložit** (Ctrl+S) ukládá layout na server, **Uložit verzi…** uloží s názvem, aby šla verze snadno vybrat ve 3D a stavový řádek ukazuje, jestli jsou změny uložené. Neuložené změny drží prohlížeč, dokud se neuloží. Když mezitím uložil někdo jiný, editor se zeptá, jestli jeho verzi přepsat. **Stáhnout** uloží `layout.json` do počítače.
 
 API editoru (`deploy/editor/server.py`): `GET /api/layout` vrátí layout a revizi v hlavičce `X-Rev`, `PUT /api/layout` s hlavičkou `X-Base-Rev` uloží (409, pokud se revize mezitím změnila). Předchozí verze jdou do `/data/history`.
 
@@ -91,7 +91,7 @@ Souřadnice v metrech: `x` na východ, `z` na jih k ulici, počátek v SZ rohu d
 
 ## Další kroky
 
-1. **Napojit zbytek procesu na `layout.json`.** `index.html` (3D v prohlížeči), `plan.mjs` (PDF) a `build_scene.py` (Blender) mají číst layout místo konstant v `index.html`. Hotovo je, až změna v editoru po uložení vidět ve 3D i v Blenderu bez ručního přepisování.
+1. ~~3D~~ hotovo (`viewer/`, výběr verze). **Napojit `plan.mjs` a Blender na `layout.json`.** `index.html` (3D v prohlížeči), `plan.mjs` (PDF) a `build_scene.py` (Blender) mají číst layout místo konstant v `index.html`. Hotovo je, až změna v editoru po uložení vidět ve 3D i v Blenderu bez ručního přepisování.
 2. **Oblouky:** vyhladit okraj plochy (Catmull-Rom nebo kvadratické segmenty), aby šlo kreslit plynulé okraje záhonů.
 3. **Podklad podle dvou bodů:** kliknout dva body na obrázku a zadat jejich skutečnou vzdálenost, obrázek se sám zvětší a srovná.
 4. **Varianty návrhu (A/B)** a jejich porovnání.

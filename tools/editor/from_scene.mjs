@@ -24,7 +24,7 @@ for (const [k, s] of Object.entries(D.SPECIES)) {
 const SHRUBS = {
   A: ['bobkovišeň', 'Prunus laurocerasus', '#2c5225', 1.6], B: ["vrba 'Hakuro Nishiki'", 'Salix integra', '#b9c7a6', 1.6],
   C: ['tavolník (oranžový)', 'Spiraea', '#d08a2c', 1.0], D: ['tavolník (žlutý)', 'Spiraea', '#b7a33a', 1.0],
-  E: ['růže', 'Rosa', '#c86d8a', 0.9], F: ['listnatý keř', '', '#4f7a3a', 1.2], G: ['ruj vlasatá', 'Cotinus coggygria', '#5b2d3d', 1.6],
+  E: ['růže', 'Rosa', '#4f7436', 0.9], F: ['listnatý keř', '', '#4f7a3a', 1.2], G: ['ruj vlasatá', 'Cotinus coggygria', '#5b2d3d', 1.6],
   H: ['muchovník', 'Amelanchier', '#b5402f', 1.8], I: ['brslen křídlatý', 'Euonymus alatus', '#c0262c', 1.2],
   J: ['hvězdnice', 'Aster', '#8a5cc0', 0.5], K: ['okrasná tráva', '', '#c8ad72', 0.8], L: ['kámen', '', '#a39e94', 0.6],
 };

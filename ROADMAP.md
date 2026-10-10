@@ -57,6 +57,8 @@ Pořadí práce: nejdřív vrstvy, zobrazení a přesun existujících prvků, p
 
 ## Fáze 3 – živý 3D náhled
 
+**Stav:** 3D (`viewer/`) se staví z `layout.json`. Jde vybrat poslední nebo konkrétní uloženou verzi a vzhled je převzatý z Codexovy studie. Zbývá: náhled přímo vedle editoru a živá aktualizace bez ukládání.
+
 - Scénu z `index.html` rozdělit na modul, který postaví 3D model z `layout.json`.
 - V editoru rozdělená obrazovka: vlevo 2D plán, vpravo 3D. Každá změna se hned promítne do 3D.
 - Rostliny ve 3D podle typu z katalogu (zjednodušené tvary, aby to běželo plynule i na iPadu).

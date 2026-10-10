@@ -122,6 +122,7 @@ dialog td.n{text-align:right}
   <div class="grp">
     <button id="open" title="Načíst layout.json ze souboru">Otevřít…</button>
     <button id="save" title="Uložit (Ctrl+S): na serveru, nebo jako soubor, když editor běží bez serveru">Uložit</button>
+    <button id="saveAs" title="Uložit na server jako pojmenovanou verzi (pro výběr ve 3D)">Uložit verzi…</button>
     <button id="download" title="Stáhnout layout.json do počítače">Stáhnout</button>
     <button id="underlay" title="Vložit obrázek jako podklad">Podklad…</button>
     <button id="list">Seznam rostlin</button>
@@ -595,19 +596,19 @@ window.addEventListener('keyup', ev => { if (ev.key === ' '){ spaceDown = false;
 // ---------- history, files ----------
 function undo(){ if (!undoStack.length) return; redoStack.push(JSON.stringify(L)); L = JSON.parse(undoStack.pop()); sel = new Set([...sel].filter(byId)); changed(); }
 function redo(){ if (!redoStack.length) return; undoStack.push(JSON.stringify(L)); L = JSON.parse(redoStack.pop()); sel = new Set([...sel].filter(byId)); changed(); }
-async function save(force = false){
+async function save(force = false, label = ''){
   if (!server) return download();
-  L.meta = {...(L.meta || {}), saved: new Date().toISOString()};
+  L.meta = {...(L.meta || {}), saved: new Date().toISOString(), label};
   try {
     const r = await fetch('api/layout', {method: 'PUT', headers: {'Content-Type': 'application/json', 'X-Base-Rev': serverRev, ...(force ? {'X-Force': '1'} : {})}, body: JSON.stringify(L)});
     if (r.status === 409){
-      if (confirm('Někdo mezitím uložil jinou verzi. Přepsat ji vaší? (Zrušit = nechat a načíst verzi ze serveru.)')) return save(true);
+      if (confirm('Někdo mezitím uložil jinou verzi. Přepsat ji vaší? (Zrušit = nechat a načíst verzi ze serveru.)')) return save(true, label);
       localStorage.removeItem(STORE); location.reload(); return;
     }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     serverRev = (await r.json()).rev; dirty = false; saveState();
     try { localStorage.removeItem(STORE); } catch(e) {}
-    hint('Uloženo na serveru. Předchozí verze je v historii.');
+    hint(label ? `Uloženo jako verze „${label}“.` : 'Uloženo na serveru. Předchozí verze je v historii.');
   } catch(err){ hint('Uložení na server se nepovedlo: ' + err.message + '. Změny zůstávají v prohlížeči.'); }
 }
 function download(){
@@ -647,7 +648,8 @@ function toggle(id){ const b = document.getElementById(id), on = b.getAttribute(
 document.querySelectorAll('#tools button').forEach(b => b.onclick = () => setTool(b.dataset.tool));
 ['snapGrid', 'snapVert', 'showGrid'].forEach(id => document.getElementById(id).onclick = () => toggle(id));
 document.getElementById('undo').onclick = undo; document.getElementById('redo').onclick = redo; document.getElementById('fit').onclick = fit;
-document.getElementById('save').onclick = () => save(); document.getElementById('download').onclick = download; document.getElementById('open').onclick = () => document.getElementById('fileJson').click();
+document.getElementById('save').onclick = () => save();
+document.getElementById('saveAs').onclick = () => { if (!server) return hint('Pojmenované verze fungují jen na serveru.'); const n = prompt('Název verze (např. „návrh A – víc trav“):'); if (n) save(false, n.trim()); }; document.getElementById('download').onclick = download; document.getElementById('open').onclick = () => document.getElementById('fileJson').click();
 document.getElementById('underlay').onclick = () => document.getElementById('fileImg').click();
 document.getElementById('list').onclick = plantList; document.getElementById('print').onclick = () => { sel.clear(); render(); fit(); setTimeout(print, 50); };
 document.getElementById('reset').onclick = () => { if (!confirm('Zahodit všechny změny a načíst výchozí layout?')) return; commit(); L = structuredClone(window.DEFAULT_LAYOUT); sel.clear(); changed(); fit(); };

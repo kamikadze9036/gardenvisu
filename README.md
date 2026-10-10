@@ -68,7 +68,9 @@ Dva kontejnery v jednom Compose projektu `gardenvisu` (`deploy/compose.yaml`), d
 | Služba | Adresa | Co to je |
 |---|---|---|
 | `editor` | http://192.168.20.30:8083 | Editor layoutu. Layout se ukládá na server (svazek `gardenvisu_layout`, historie posledních 50 verzí), takže je stejný na všech zařízeních |
-| `viewer` | http://192.168.20.30:8084 | 3D model v Three.js (`index.html`) a starší verze v `/verze/` |
+| `viewer` | http://192.168.20.30:8084 | 3D zahrada z layoutu editoru (`viewer/`, viz [viewer/README.md](viewer/README.md)): výběr poslední nebo konkrétní verze layoutu, detailní rostliny, procházení. Původní jednoduchý model je na `/jednoduchy/`, starší verze na `/verze/` |
+
+Assety 3D (`viewer/assets/`: textury, oblohu, modely, `plants.bin`, `scene.glb`) git neobsahuje. Na Dellu leží v `~/Projects/gardenvisu/viewer/assets/` a jak je vyrobit, popisuje `viewer/README.md`.
 
 Aktualizace po změnách v repu (z Macu):
 
