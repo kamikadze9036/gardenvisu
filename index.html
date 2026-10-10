@@ -164,20 +164,20 @@ const DESIGN_BEDS = [NORTH_BED, NE_YARD, ...PLAN_BEDS.map(b=>[[b.x0,b.z0],[b.x0+
 
 // Trees: position, height, crown radius, colour
 const TREES = [
-  {kind:'deciduous',x:12.6,z:27.0,h:4.6,r:1.4,c:'#5b8540'},   // tree in the south bed (newer aerial)
-  {kind:'deciduous',x:16.4,z:29.2,h:4.2,r:0.8,c:'#4a2a35'},   // weeping purple beech by the gate (photo 07)
-  {kind:'deciduous',x:26.3,z:19.5,h:4.5,r:1.3,c:'#7d9a45'},   // birch by the east boundary (photo 09)
-  {kind:'deciduous',x:6.5, z:27.6,h:2.0,r:1.0,c:'#b5302a'},   // red Japanese maple in the street border (photo 01)
-  {kind:'conifer',  x:21.0,z:26.0,h:3.2,r:0.9,c:'#3e6a45'},   // weeping spruce by the drive (photos 03, 08)
-  {kind:'conifer',  x:25.6,z:11.4,h:2.2,r:0.7,c:'#2f5a3a'},   // small spruce on the east lawn
-  {kind:'deciduous',x:-4.7,z:4.5, h:3.2,r:1.2,c:'#4f7a3a'},   // large shrubs in the west border
-  {kind:'deciduous',x:-4.7,z:14.0,h:3.0,r:1.1,c:'#5d8a45'},
-  {kind:'deciduous',x:-4.9,z:9.6, h:6.5,r:2.2,c:'#6f8f45'},   // large tree in the west bed (photos 15, 19, 20)
-  {kind:'conifer',  x:-4.2,z:7.4, h:2.6,r:0.55,c:'#8aa3ad'},  // two blue cedars on stakes
-  {kind:'conifer',  x:-4.5,z:8.5, h:2.8,r:0.6, c:'#8aa3ad'},
-  {kind:'deciduous',x:3.2, z:-4.0,h:3.0,r:1.0,c:'#5a2d3a'},   // purple-leaved tree by the north fence (photo 14)
-  {kind:'deciduous',x:-1.6,z:-3.9,h:2.4,r:0.8,c:'#8a9a40'},   // weeping tree on stakes in the north-west corner (photo 16)
-  {kind:'conifer',  x:11.8,z:15.9,h:0.8,r:0.4,c:'#4f6b35'}    // dwarf pine in the pebble bed (photo 02)
+  {name:'listnatý strom',kind:'deciduous',x:12.6,z:27.0,h:4.6,r:1.4,c:'#5b8540'},   // tree in the south bed (newer aerial)
+  {name:'převislý buk (purpurový)',kind:'deciduous',x:16.4,z:29.2,h:4.2,r:0.8,c:'#4a2a35'},   // weeping purple beech by the gate (photo 07)
+  {name:'bříza',kind:'deciduous',x:26.3,z:19.5,h:4.5,r:1.3,c:'#7d9a45'},   // birch by the east boundary (photo 09)
+  {name:'javor dlanitolistý (červený)',kind:'deciduous',x:6.5, z:27.6,h:2.0,r:1.0,c:'#b5302a'},   // red Japanese maple in the street border (photo 01)
+  {name:'převislý smrk',kind:'conifer',  x:21.0,z:26.0,h:3.2,r:0.9,c:'#3e6a45'},   // weeping spruce by the drive (photos 03, 08)
+  {name:'smrček',kind:'conifer',  x:25.6,z:11.4,h:2.2,r:0.7,c:'#2f5a3a'},   // small spruce on the east lawn
+  {name:'velký keř',kind:'deciduous',x:-4.7,z:4.5, h:3.2,r:1.2,c:'#4f7a3a'},   // large shrubs in the west border
+  {name:'velký keř',kind:'deciduous',x:-4.7,z:14.0,h:3.0,r:1.1,c:'#5d8a45'},
+  {name:'velký listnatý strom',kind:'deciduous',x:-4.9,z:9.6, h:6.5,r:2.2,c:'#6f8f45'},   // large tree in the west bed (photos 15, 19, 20)
+  {name:'cedr (modrý)',kind:'conifer',  x:-4.2,z:7.4, h:2.6,r:0.55,c:'#8aa3ad'},  // two blue cedars on stakes
+  {name:'cedr (modrý)',kind:'conifer',  x:-4.5,z:8.5, h:2.8,r:0.6, c:'#8aa3ad'},
+  {name:'strom s purpurovými listy',kind:'deciduous',x:3.2, z:-4.0,h:3.0,r:1.0,c:'#5a2d3a'},   // purple-leaved tree by the north fence (photo 14)
+  {name:'převislý stromek',kind:'deciduous',x:-1.6,z:-3.9,h:2.4,r:0.8,c:'#8a9a40'},   // weeping tree on stakes in the north-west corner (photo 16)
+  {name:'zakrslá borovice',kind:'conifer',  x:11.8,z:15.9,h:0.8,r:0.4,c:'#4f6b35'}    // dwarf pine in the pebble bed (photo 02)
 ];
 
 const H = {eave:4.15, ridge:7.72, garage:2.97, street:-0.9, wallTop:0.7};

@@ -19,6 +19,7 @@ Interaktivní 3D model rodinného domu a zahrady pro návrh nové zahrady. Model
 | `tools/preview/` | Headless náhled modelu, uloží screenshot každého pohledu. `export.mjs` vyexportuje model pro Blender |
 | `tools/blender/build_scene.py` | Sestaví fotorealistickou scénu v Blenderu a vyrenderuje pohledy v Cycles |
 | `tools/blender/flythrough.py` | Video průlet zahradou (MP4), spouští se po `build_scene.py` |
+| `tools/preview/plan.mjs` | Půdorys stávajícího stavu podle modelu (A3, 1 : 150, PDF + PNG), rostliny očíslované jako v osazovacím plánu. Spuštění: `PW_CHANNEL=chrome node plan.mjs ../blender/data/scene.json out` po exportu |
 | `tools/blender/fetch_assets.py` | Stáhne textury, oblohu a modely z Poly Haven do `tools/blender/assets/` |
 | `podklady/navrh/` | Osazovací plán, inspirační fotky (cesta za domem, zastřešení bazénu). **Jen lokálně** |
 | `podklady/fotky/realita/` | Fotky skutečného stavu 01–22 a jejich popis `POPIS.md`. **Jen lokálně** |
